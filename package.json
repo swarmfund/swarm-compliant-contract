@@ -1,0 +1,24 @@
+{
+  "name": "swarm-fundraising-contract",
+  "version": "0.0.1",
+  "description": "Fundraising Platform Solidity Contracts",
+  "scripts": {},
+  "private": true,
+  "dependencies": {
+    "chai": "4.2.0",
+    "ethereumjs-abi": "^0.6.7",
+    "moment": "^2.24.0",
+    "openzeppelin-solidity": "2.2.0",
+    "openzeppelin-test-helpers": "0.3.2",
+    "web3": "1.0.0-beta.47"
+  },
+  "devDependencies": {},
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "keywords": [],
+  "author": "SwarmFund",
+  "license": "ISC",
+  "repository": ""
+}

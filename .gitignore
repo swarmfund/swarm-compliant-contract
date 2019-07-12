@@ -1,0 +1,7 @@
+node_modules
+build
+.idea
+.vscode
+package-lock.json
+.env
+.secret
