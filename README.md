@@ -1,8 +1,8 @@
-# Swarm Fundraising Contract
+# Swarm Compliant Token Contract
 
-The official Swarm Fundraising contract with SRC-20 implementation in Solidity.
+The official Swarm compliant token contract with SRC-20 implementation in Solidity.
 
-This is the whole Ethereum contract infrastructure used for deploying Security Token Offerings though Swarm's Infrastructure.
+This is the whole Ethereum contract infrastructure used for deploying regulatory compliant tokens though Swarm's Infrastructure.
 
 # Requirements
 
