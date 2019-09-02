@@ -73,7 +73,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      * @dev Update KYA document, sending document hash and url. Hash is
      * SHA256 hash of document content.
      * Emits KYAUpdated event.
-     * Allowed to be called by owner or delete accounts.
+     * Allowed to be called by owner or delegate accounts.
      *
      * @param kyaHash SHA256 hash of KYA document.
      * @param kyaUrl URL of token's KYA document (ipfs, http, etc.).
