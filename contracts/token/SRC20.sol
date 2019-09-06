@@ -7,12 +7,13 @@ import "./SRC20Detailed.sol";
 import "./ISRC20.sol";
 import "./ISRC20Owned.sol";
 import "./ISRC20Managed.sol";
-import "./Featured.sol";
-import "./AuthorityRole.sol";
+import "./Featured.sol";s
 import "./Freezable.sol";
-import "./DelegateRole.sol";
 import "../rules/ITransferRestriction.sol";
 import "./Managed.sol";
+import "../roles/DelegateRole.sol";
+import "../roles/AuthorityRole.sol";
+import "../roles/RestrictionRole.sol";
 
 
 /**
@@ -20,7 +21,7 @@ import "./Managed.sol";
  * @dev Base SRC20 contract.
  */
 contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
-        AuthorityRole, DelegateRole, Freezable, Ownable, Managed {
+        AuthorityRole, DelegateRole, RestrictionRole, Freezable, Ownable, Managed {
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
@@ -53,19 +54,27 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         uint8 decimals,
         bytes32 kyaHash,
         string memory kyaUrl,
-        address restrictions,
+        address restrictions, // this should be universal Interface
         uint8 features,
         uint256 totalSupply
     )
     SRC20Detailed(name, symbol, decimals)
     Featured(features)
+    RestrictionRole(restrictions)
     public
     {
         _transferOwnership(owner);
+        restrictions.setSRC(address(this));
+
 
         _totalSupply = totalSupply;
         _balances[owner] = _totalSupply;
         _updateKYA(kyaHash, kyaUrl, restrictions);
+    }
+
+
+    function completeTransfer(address from, address to, uint256 value) external onlyTransferRestrictor returns (bool) {
+        return _transfer(from, to, value);
     }
 
     // KYA management
@@ -118,11 +127,11 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     /**
      * @dev Transfer token to specified address. Caller needs to provide authorization
      * signature obtained from MAP API, signed by authority accepted by token issuer.
-     * Emits Transfer event. 
+     * Emits Transfer event.
      *
      * @param to The address to send tokens to.
      * @param value The amount of tokens to send.
-     * @param nonce Token transfer nonce, can not repeat nance for subsequent
+     * @param nonce Token transfer nonce, can not repeat nonce for subsequent
      * token transfers.
      * @param expirationTime Timestamp until transfer request is valid.
      * @param hash Hash of transfer params (kyaHash, from, to, value, nonce, expirationTime).
@@ -201,7 +210,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     /**
      * @dev Returns next nonce expected by transfer functions that require it.
      * After any successful transfer, nonce will be incremented.
-     * 
+     *
      * @return Nonce for next transfer function.
      */
     function getTransferNonce() external view returns (uint256) {
@@ -223,7 +232,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      * @dev Check if specified account is authority. Authorities are accounts
      * that can sign token transfer request, usually after off-chain token restriction
      * checks.
-     * 
+     *
      * @return True if specified account is authority account.
      */
     function isAuthority(address account) external view returns (bool) {
@@ -358,7 +367,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      * @dev Function that burns an amount of the token of a given
      * account.
      * Emits Transfer event, with to address set to zero.
-     * 
+     *
      * @return True on success.
      */
     function burnAccount(address account, uint256 value)
