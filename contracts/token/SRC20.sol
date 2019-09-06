@@ -3,6 +3,7 @@ pragma solidity ^0.5.0;
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
+import "openzeppelin-solidity/contracts/lifecycle/Pausable.sol";
 import "./SRC20Detailed.sol";
 import "./ISRC20.sol";
 import "./ISRC20Owned.sol";
@@ -20,7 +21,7 @@ import "./Managed.sol";
  * @dev Base SRC20 contract.
  */
 contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
-        AuthorityRole, DelegateRole, Freezable, Ownable, Managed {
+        AuthorityRole, DelegateRole, Pausable, Freezable, Ownable, Managed {
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
@@ -59,9 +60,12 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     )
     SRC20Detailed(name, symbol, decimals)
     Featured(features)
+    PauserRole()
     public
     {
         _transferOwnership(owner);
+        addPauser(owner);
+        renouncePauser();
 
         _totalSupply = totalSupply;
         _balances[owner] = _totalSupply;
@@ -118,7 +122,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     /**
      * @dev Transfer token to specified address. Caller needs to provide authorization
      * signature obtained from MAP API, signed by authority accepted by token issuer.
-     * Emits Transfer event. 
+     * Emits Transfer event.
      *
      * @param to The address to send tokens to.
      * @param value The amount of tokens to send.
@@ -201,7 +205,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     /**
      * @dev Returns next nonce expected by transfer functions that require it.
      * After any successful transfer, nonce will be incremented.
-     * 
+     *
      * @return Nonce for next transfer function.
      */
     function getTransferNonce() external view returns (uint256) {
@@ -223,7 +227,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      * @dev Check if specified account is authority. Authorities are accounts
      * that can sign token transfer request, usually after off-chain token restriction
      * checks.
-     * 
+     *
      * @return True if specified account is authority account.
      */
     function isAuthority(address account) external view returns (bool) {
@@ -299,7 +303,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      */
     function freezeAccount(address account)
         external
-        enabled(Featured.Freezing)
+        enabled(Featured.AccountFreezing)
         onlyOwner
     {
         _freezeAccount(account);
@@ -311,7 +315,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      */
     function unfreezeAccount(address account)
         external
-        enabled(Featured.Freezing)
+        enabled(Featured.AccountFreezing)
         onlyOwner
     {
         _unfreezeAccount(account);
@@ -325,32 +329,32 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      *
      * @return True if token is frozen.
      */
-    function isTokenFrozen() external view returns (bool) {
-        return _isTokenFrozen();
+    function isTokenPaused() external view returns (bool) {
+        return paused();
     }
 
     /**
-     * @dev Freezes token.
-     * Emits TokenFrozen event.
+     * @dev Pauses token.
+     * Emits TokenPaused event.
      */
-    function freezeToken()
+    function pauseToken()
         external
-        enabled(Featured.Freezing)
+        enabled(Featured.Pausable)
         onlyOwner
     {
-        _freezeToken();
+        pause();
     }
 
     /**
-     * @dev Freezes token.
-     * Emits TokenUnfrozen event.
+     * @dev Unpauses token.
+     * Emits TokenUnPaused event.
      */
-    function unfreezeToken()
+    function unPauseToken()
         external
-        enabled(Featured.Freezing)
+        enabled(Featured.Pausable)
         onlyOwner
     {
-        _unfreezeToken();
+        unpause();
     }
 
     // Account token burning management
@@ -358,7 +362,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      * @dev Function that burns an amount of the token of a given
      * account.
      * Emits Transfer event, with to address set to zero.
-     * 
+     *
      * @return True on success.
      */
     function burnAccount(address account, uint256 value)

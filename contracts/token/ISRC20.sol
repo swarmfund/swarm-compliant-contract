@@ -18,7 +18,7 @@ interface ISRC20 {
 
     function getTransferNonce() external view returns (uint256);
     function isAuthority(address account) external view returns (bool);
-    function isTokenFrozen() external view returns (bool);
+    function isTokenPaused() external view returns (bool);
     function isFrozen(address account) external view returns (bool);
 
     function getTransferNonce(address account) external view returns (uint256);

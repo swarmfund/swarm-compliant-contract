@@ -21,7 +21,5 @@ interface ISRC20Owned {
     function removeAuthority(address account) external;
     function freezeAccount(address account) external;
     function unfreezeAccount(address account) external;
-    function freezeToken() external;
-    function unfreezeToken() external;
     function burnAccount(address account, uint256 value) external returns (bool);
 }
