@@ -3,6 +3,7 @@ pragma solidity ^0.5.0;
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
+import "openzeppelin-solidity/contracts/lifecycle/Pausable.sol";
 import "./SRC20Detailed.sol";
 import "./ISRC20.sol";
 import "./ISRC20Owned.sol";
@@ -22,7 +23,7 @@ import "../rules/TransferRules.sol";
  * @dev Base SRC20 contract.
  */
 contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
-        AuthorityRole, DelegateRole, RestrictionRole, Freezable, Ownable, Managed {
+Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Managed {
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
@@ -46,7 +47,6 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      */
     TransferRules private _restrictions;
 
-
     // Constructors
     constructor(
         address owner,
@@ -61,25 +61,25 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     )
     SRC20Detailed(name, symbol, decimals)
     Featured(features)
+    PauserRole()
     RestrictionRole(restrictions)
     public
     {
         _transferOwnership(owner);
-        TransferRules(restrictions).setSRC(address(this));
+        addPauser(owner);
+        renouncePauser();
 
         _totalSupply = totalSupply;
         _balances[owner] = _totalSupply;
         _updateKYA(kyaHash, kyaUrl, restrictions);
-    }
 
+        if (restrictions != address(0)) {
+            _restrictions.setSRC(address(this));
+        }
+    }
 
     function executeTransfer(address from, address to, uint256 value) external onlyTransferRestrictor returns (bool) {
         _transfer(from, to, value);
-        return true;
-    }
-
-    function transfer(address to, uint256 value) external returns (bool) {
-        TransferRules(_restrictions).doTransfer(msg.sender, to, value);
         return true;
     }
 
@@ -106,7 +106,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      * @return Hash of KYA document.
      * @return URL of KYA document.
      */
-    function getKYA() external view returns (bytes32, string memory, address) {
+    function getKYA() public view returns (bytes32, string memory, address) {
         return (_kya.kyaHash, _kya.kyaUrl, address(_restrictions));
     }
 
@@ -123,7 +123,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     function _updateKYA(bytes32 kyaHash, string memory kyaUrl, address restrictions) internal returns (bool) {
         _kya.kyaHash = kyaHash;
         _kya.kyaUrl = kyaUrl;
-        _restrictions = ITransferRestriction(restrictions);
+        _restrictions = TransferRules(restrictions);
 
         emit KYAUpdated(kyaHash, kyaUrl, restrictions);
 
@@ -152,7 +152,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         bytes32 hash,
         bytes calldata signature
     )
-        external returns (bool)
+    external returns (bool)
     {
         return _transferToken(msg.sender, to, value, nonce, expirationTime, hash, signature);
     }
@@ -183,7 +183,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         bytes32 hash,
         bytes calldata signature
     )
-        external returns (bool)
+    external returns (bool)
     {
         _transferToken(from, to, value, nonce, expirationTime, hash, signature);
         _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
@@ -203,10 +203,10 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     * @return True on success.
     */
     function transferTokenForced(address from, address to, uint256 value)
-        external
-        enabled(Featured.ForceTransfer)
-        onlyOwner
-        returns (bool)
+    external
+    enabled(Featured.ForceTransfer)
+    onlyOwner
+    returns (bool)
     {
         _transfer(from, to, value);
         return true;
@@ -219,7 +219,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      *
      * @return Nonce for next transfer function.
      */
-    function getTransferNonce() external view returns (uint256) {
+    function getTransferNonce() public view returns (uint256) {
         return _nonce[msg.sender];
     }
 
@@ -228,7 +228,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      *
      * @return Nonce for next transfer function.
      */
-    function getTransferNonce(address account) external view returns (uint256) {
+    function getTransferNonce(address account) public view returns (uint256) {
         return _nonce[account];
     }
 
@@ -241,7 +241,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      *
      * @return True if specified account is authority account.
      */
-    function isAuthority(address account) external view returns (bool) {
+    function isAuthority(address account) public view returns (bool) {
         return _hasAuthority(account);
     }
 
@@ -268,7 +268,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      *
      * @return True if specified account is delegate account.
      */
-    function isDelegate(address account) external view returns (bool) {
+    function isDelegate(address account) public view returns (bool) {
         return _hasDelegate(account);
     }
 
@@ -304,8 +304,8 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      *
      * @return True if account is frozen.
      */
-    function isFrozen(address account) external view returns (bool) {
-        return _isFrozen(account);
+    function isAccountFrozen(address account) public view returns (bool) {
+        return _isAccountFrozen(account);
     }
 
     /**
@@ -313,9 +313,9 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      * Emits AccountFrozen event.
      */
     function freezeAccount(address account)
-        external
-        enabled(Featured.Freezing)
-        onlyOwner
+    external
+    enabled(Featured.AccountFreezing)
+    onlyOwner
     {
         _freezeAccount(account);
     }
@@ -325,9 +325,9 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      * Emits AccountUnfrozen event.
      */
     function unfreezeAccount(address account)
-        external
-        enabled(Featured.Freezing)
-        onlyOwner
+    external
+    enabled(Featured.AccountFreezing)
+    onlyOwner
     {
         _unfreezeAccount(account);
     }
@@ -340,32 +340,32 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      *
      * @return True if token is frozen.
      */
-    function isTokenFrozen() external view returns (bool) {
-        return _isTokenFrozen();
+    function isTokenPaused() public view returns (bool) {
+        return paused();
     }
 
     /**
-     * @dev Freezes token.
-     * Emits TokenFrozen event.
+     * @dev Pauses token.
+     * Emits TokenPaused event.
      */
-    function freezeToken()
-        external
-        enabled(Featured.Freezing)
-        onlyOwner
+    function pauseToken()
+    external
+    enabled(Featured.Pausable)
+    onlyOwner
     {
-        _freezeToken();
+        pause();
     }
 
     /**
-     * @dev Freezes token.
-     * Emits TokenUnfrozen event.
+     * @dev Unpauses token.
+     * Emits TokenUnPaused event.
      */
-    function unfreezeToken()
-        external
-        enabled(Featured.Freezing)
-        onlyOwner
+    function unPauseToken()
+    external
+    enabled(Featured.Pausable)
+    onlyOwner
     {
-        _unfreezeToken();
+        unpause();
     }
 
     // Account token burning management
@@ -377,10 +377,10 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      * @return True on success.
      */
     function burnAccount(address account, uint256 value)
-        external
-        enabled(Featured.AccountBurning)
-        onlyOwner
-        returns (bool)
+    external
+    enabled(Featured.AccountBurning)
+    onlyOwner
+    returns (bool)
     {
         _burn(account, value);
         return true;
@@ -456,6 +456,40 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         return true;
     }
 
+    function transfer(address to, uint256 value) external returns (bool) {
+        require(!isTokenPaused(), "Token is frozen!");
+        require(!_isAccountFrozen(msg.sender), "From account is frozen!");
+        require(!_isAccountFrozen(to), "To account is frozen!");
+
+        if (_restrictions != TransferRules(0)) {
+            require(_restrictions.authorize(msg.sender, to, value), "Transfer not authorized");
+
+            _restrictions.doTransfer(msg.sender, to, value);
+        } else {
+            _transfer(msg.sender, to, value);
+        }
+
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 value) external returns (bool) {
+        require(!isTokenPaused(), "Token is frozen!");
+        require(!_isAccountFrozen(from), "From account is frozen!");
+        require(!_isAccountFrozen(to), "To account is frozen!");
+
+        if (_restrictions != TransferRules(0)) {
+            require(_restrictions.authorize(from, to, value), "Transfer not authorized");
+
+            _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
+            _restrictions.doTransfer(msg.sender, to, value);
+        } else {
+            _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
+            _transfer(msg.sender, to, value);
+        }
+
+        return true;
+    }
+
     /**
      * @dev Atomically increase approved tokens to the spender on behalf of msg.sender.
      *
@@ -503,9 +537,16 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         bytes32 hash,
         bytes memory signature
     )
-        internal returns (bool)
+    internal returns (bool)
     {
-        require(_isFrozen(from) == false && _isFrozen(to) == false, "transferToken frozen");
+        require(!isTokenPaused(), "Token is frozen!");
+        require(!_isAccountFrozen(from), "From account is frozen!");
+        require(!_isAccountFrozen(to), "To account is frozen!");
+
+        if (address(_restrictions) != address(0)) {
+            require(_restrictions.authorize(from, to, value), "transferToken restrictions failed");
+        }
+
         require(now <= expirationTime, "transferToken params expired");
         require(nonce == _nonce[from], "transferToken params wrong nonce");
         require(
@@ -513,10 +554,6 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
             "transferToken params bad hash"
         );
         require(_hasAuthority(hash.toEthSignedMessageHash().recover(signature)), "transferToken params not authority");
-
-        if (_restrictions != ITransferRestriction(0)) {
-            require(_restrictions.authorize(address(this), from, to, value), "transferToken restrictions failed");
-        }
 
         _transfer(from, to, value);
 
@@ -535,7 +572,8 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         _balances[from] = _balances[from].sub(value);
         _balances[to] = _balances[to].add(value);
 
-        _nonce[from]++; // no need for safe math here
+        _nonce[from]++;
+        // no need for safe math here
 
         emit Transfer(from, to, value);
     }

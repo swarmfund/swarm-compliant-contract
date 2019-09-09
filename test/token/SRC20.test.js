@@ -279,26 +279,45 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
         "Feature not enabled");
     });
 
-    it('should allow account and token freezing if feature enabled', async function () {
-      const tokenFreezing = await this.token.Freezing();
-      await this.token.featureEnable(tokenFreezing);
+    it('should allow token pausing if feature enabled', async function () {
+      const tokenPausable = await this.token.Pausable();
+      await this.token.featureEnable(tokenPausable);
 
-      ({logs: this.logs} = await this.token.freezeToken({from: owner}));
-      expectEvent.inLogs(this.logs, 'TokenFrozen');
+      ({logs: this.logs} = await this.token.pauseToken({from: owner}));
+      expectEvent.inLogs(this.logs, 'Paused');
+
+      const isPaused = await this.token.paused({from: owner});
+      assert.equal(isPaused, true);
+
+    });
+
+    it('should allow account freezing if feature enabled', async function () {
+      const accountFreezing = await this.token.AccountFreezing();
+      await this.token.featureEnable(accountFreezing);
 
       ({logs: this.logs} = await this.token.freezeAccount(account0, {from: owner}));
       expectEvent.inLogs(this.logs, 'AccountFrozen', {
         account: account0
       });
+
+      const isAccountFrozen = await this.token.isAccountFrozen(account0, {from: owner});
+      assert.equal(isAccountFrozen, true);
+
     });
 
-    it('should not allow account and token freezing if feature disabled', async function () {
-      await shouldFail.reverting.withMessage(this.token.freezeToken({from: owner}),
-        "Feature not enabled");
+    it('should not allow token pausing if caller is not owner');
 
+    it('should not allow token pausing if feature disabled', async function () {
+      await shouldFail.reverting.withMessage(this.token.pauseToken({from: owner}),
+        "Feature not enabled");
+    });
+
+    it('should not allow account freezing if feature disabled', async function () {
       await shouldFail.reverting.withMessage(this.token.freezeAccount(account0, {from: owner}),
-        "Feature not enabled");
+          "Feature not enabled");
     });
+
+
 
     it('should allow owner to burn tokens of any specific account, if feature enabled', async function () {
       const accountBurning = await this.token.AccountBurning();

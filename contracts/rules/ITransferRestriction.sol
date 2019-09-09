@@ -8,5 +8,6 @@ pragma solidity ^0.5.0;
  * same interface, managing multiply transfer restriction implementations.
  */
 interface ITransferRestriction {
-    function authorize(address src20, address from, address to, uint256 value) external returns (bool);
+    function setSRC(address src20) external returns (bool);
+    function authorize(address from, address to, uint256 value) external returns (bool);
 }

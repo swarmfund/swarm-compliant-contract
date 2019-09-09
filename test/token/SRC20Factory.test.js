@@ -365,6 +365,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       const manager = await this.token.manager();
       assert.equal(account0 === manager, true);
     });
+
     it('should be able to renounce management', async function () {
       await this.registry.renounceManagement(this.token.address, {from: owner});
 

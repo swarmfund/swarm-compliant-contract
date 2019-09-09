@@ -16,7 +16,7 @@ contract RestrictionRole {
     Roles.Role private _restrictor;
 
     constructor(address account) public {
-        _restrictor.add(account);
+        _restrictor.bearer[account] = true; // @TODO rework this stupid hack
     }
 
     /**

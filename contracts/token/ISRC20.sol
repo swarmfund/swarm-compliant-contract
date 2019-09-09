@@ -18,8 +18,8 @@ interface ISRC20 {
 
     function getTransferNonce() external view returns (uint256);
     function isAuthority(address account) external view returns (bool);
-    function isTokenFrozen() external view returns (bool);
-    function isFrozen(address account) external view returns (bool);
+    function isTokenPaused() external view returns (bool);
+    function isAccountFrozen(address account) external view returns (bool);
 
     function getTransferNonce(address account) external view returns (uint256);
 
@@ -33,6 +33,8 @@ interface ISRC20 {
     function balanceOf(address who) external view returns (uint256);
     function allowance(address owner, address spender) external view returns (uint256);
     function approve(address spender, uint256 value) external returns (bool);
+    function transfer(address to, uint256 value) external returns (bool);
+    function transferFrom(address from, address to, uint256 value) external returns (bool);
 
     function increaseAllowance(address spender, uint256 value) external returns (bool);
     function decreaseAllowance(address spender, uint256 value) external returns (bool);

@@ -3,7 +3,7 @@ pragma solidity ^0.5.10;
 import "./ManualApproval.sol";
 import "./Whitelisted.sol";
 
-contract TransferRules is ManualApproval, Whitelisted {
+contract TransferRules is ITransferRestriction, ManualApproval, Whitelisted {
     address private _src20;
 
     modifier onlySRC20 {
@@ -17,6 +17,11 @@ contract TransferRules is ManualApproval, Whitelisted {
         return true;
     }
 
+    function authorize(address from, address to, uint256 value) public returns (bool) {
+        return (isWhitelisted(from) || isGrayListed(from)) &&
+               (isWhitelisted(to) || isGrayListed(to));
+    }
+
     function doTransfer(address from, address to, uint256 value) external onlySRC20 returns (bool) {
         if (isWhitelisted(from) && isWhitelisted(from)) {
             if (isGrayListed(from) || isGrayListed(to)) {
@@ -26,7 +31,12 @@ contract TransferRules is ManualApproval, Whitelisted {
             }
         }
 
-        // todo...
+        if (isGrayListed(from) && isWhitelisted(to) ||
+            isWhitelisted(from) && isGrayListed(to) ||
+            isGrayListed(from) && isGrayListed(to)
+        ) {
+            ISRC20(_src20).executeTransfer(from, to, value);
+        }
 
         return true;
     }
