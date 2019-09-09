@@ -5,23 +5,23 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "../token/ISRC20.sol";
 
 // owner should be authority role in SRC20
-contract ManualApproval is ITransferRestriction, Ownable {
-    struct TransferRequest {
+contract ManualApproval is Ownable {
+    struct TransferReq {
         address from;
         address to;
         uint256 value;
     }
 
     uint256 private _reqNumber;
-    ISRC20 private src; // move to aggregator...
+    ISRC20 private _src20; // move to aggregator...
 
-    mapping(uint256 => TransferRequest) private _transferReq;
+    mapping(uint256 => TransferReq) private _transferReq;
     mapping(address => bool) private _grayList;
 
     event TransferRequest(
         uint256 indexed requestNumber,
-        address indexed from,
-        address indexed to,
+        address from,
+        address to,
         uint256 value
     );
 
@@ -29,29 +29,31 @@ contract ManualApproval is ITransferRestriction, Ownable {
         uint256 indexed requestNumber,
         address indexed from,
         address indexed to,
-        address value
+        uint256 value
     );
 
-    constructor () {
-        _reqNumber = 0;
+    event TransferRequestCanceled(
+        uint256 indexed requestNumber,
+        address indexed from,
+        address indexed to,
+        uint256 value
+    );
+
+    constructor () public {
     }
 
     /**
     * @dev ...
     *
     */
-    function transferRequest(address from, address to, uint256 value) external returns (bool) {// where to transfer funds to this contract???
+    function _transferRequest(address from, address to, uint256 value) internal returns (bool) {
         if (!(_grayList[from] || _grayList[to])) {
             return false;
         }
 
-        src.completeTransfer(from, address(this), value); //ERC20 transfer() no from...
+        _src20.executeTransfer(from, address(this), value);
 
-        _transferReq[_reqNumber] = new TransferRequest(
-            from,
-            to,
-            value
-        );
+        _transferReq[_reqNumber] = TransferReq(from, to, value);
 
         emit TransferRequest(_reqNumber, from, to, value);
         _reqNumber = _reqNumber + 1;
@@ -60,9 +62,9 @@ contract ManualApproval is ITransferRestriction, Ownable {
     }
 
     function transferApproval(uint256 reqNumber) external onlyOwner returns (bool) {
-        TransferRequest req = _transferReq[reqNumber];
+        TransferReq memory req = _transferReq[reqNumber];
 
-        src.completeTransfer(address(this), req.to, value);
+        _src20.executeTransfer(address(this), req.to, req.value);
 
         delete _transferReq[reqNumber];
         emit TransferApproval(reqNumber, req.from, req.to, req.value);
@@ -70,10 +72,10 @@ contract ManualApproval is ITransferRestriction, Ownable {
     }
 
     function cancelTransferRequest(uint256 reqNumber) external returns (bool) {
-        TransferRequest req = _transferReq[reqNumber];
+        TransferReq memory req = _transferReq[reqNumber];
         require(req.from == msg.sender, "Not owner of the transfer request");
 
-        src.completeTransfer(address(this), req.from, req.value);
+        _src20.executeTransfer(address(this), req.from, req.value);
 
         delete _transferReq[reqNumber];
         emit TransferRequestCanceled(reqNumber, req.from, req.to, req.value);
@@ -82,11 +84,17 @@ contract ManualApproval is ITransferRestriction, Ownable {
     }
 
     // Handling gray listing
-    function grayListedAccount(address account) external onlyOwner {
-        _grayList[account] = true;
+    function isGrayListed(address account) public view returns (bool){
+        return _grayList[account];
     }
 
-    function unGrayListedAccount(address account) external onlyOwner {
-        _grayList[account] = false;
+    function grayListedAccount(address account) external onlyOwner returns (bool){
+        _grayList[account] = true;
+        return true;
+    }
+
+    function unGrayListedAccount(address account) external onlyOwner returns (bool){
+        delete _grayList[account];
+        return true;
     }
 }

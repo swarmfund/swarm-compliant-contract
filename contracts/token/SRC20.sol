@@ -7,13 +7,14 @@ import "./SRC20Detailed.sol";
 import "./ISRC20.sol";
 import "./ISRC20Owned.sol";
 import "./ISRC20Managed.sol";
-import "./Featured.sol";s
+import "./Featured.sol";
 import "./Freezable.sol";
 import "../rules/ITransferRestriction.sol";
 import "./Managed.sol";
 import "../roles/DelegateRole.sol";
 import "../roles/AuthorityRole.sol";
 import "../roles/RestrictionRole.sol";
+import "../rules/TransferRules.sol";
 
 
 /**
@@ -43,7 +44,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      * If set, transferToken will consult this contract should transfer
      * be allowed after successful authorization signature check.
      */
-    ITransferRestriction private _restrictions;
+    TransferRules private _restrictions;
 
 
     // Constructors
@@ -54,7 +55,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         uint8 decimals,
         bytes32 kyaHash,
         string memory kyaUrl,
-        address restrictions, // this should be universal Interface
+        address restrictions,
         uint8 features,
         uint256 totalSupply
     )
@@ -64,8 +65,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     public
     {
         _transferOwnership(owner);
-        restrictions.setSRC(address(this));
-
+        TransferRules(restrictions).setSRC(address(this));
 
         _totalSupply = totalSupply;
         _balances[owner] = _totalSupply;
@@ -73,8 +73,14 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     }
 
 
-    function completeTransfer(address from, address to, uint256 value) external onlyTransferRestrictor returns (bool) {
-        return _transfer(from, to, value);
+    function executeTransfer(address from, address to, uint256 value) external onlyTransferRestrictor returns (bool) {
+        _transfer(from, to, value);
+        return true;
+    }
+
+    function transfer(address to, uint256 value) external returns (bool) {
+        TransferRules(_restrictions).doTransfer(msg.sender, to, value);
+        return true;
     }
 
     // KYA management

@@ -15,15 +15,15 @@ contract RestrictionRole {
 
     Roles.Role private _restrictor;
 
-    constructor(address account) {
-        _restrictor.add(_restrictor, account);
+    constructor(address account) public {
+        _restrictor.add(account);
     }
 
     /**
      * @dev Throws if called by any account other than the delegate.
      */
     modifier onlyTransferRestrictor() {
-        require(_hasDelegate(msg.sender));
+        require(_hasRestrictions(msg.sender));
         _;
     }
 

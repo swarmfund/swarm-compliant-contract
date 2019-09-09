@@ -22,11 +22,7 @@ contract Whitelisted is ITransferRestriction, Ownable {
          _whitelisted[account] = false;
     }
 
-    function authorize(address src20Address, address from, address to, uint256 value) external returns (bool) {
-        return _isWhitelisted(from) == true && _isWhitelisted(to) == true;
-    }
-
-    function _isWhitelisted(address account) internal view returns (bool) {
+    function isWhitelisted(address account) public view returns (bool) {
         return _whitelisted[account];
     }
 }

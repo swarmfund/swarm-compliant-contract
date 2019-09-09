@@ -23,6 +23,8 @@ interface ISRC20 {
 
     function getTransferNonce(address account) external view returns (uint256);
 
+    function executeTransfer(address from, address to, uint256 value) external returns (bool);
+
     // ERC20 part-like interface
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
