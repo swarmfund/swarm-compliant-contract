@@ -3,7 +3,6 @@ pragma solidity ^0.5.0;
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
-import "openzeppelin-solidity/contracts/lifecycle/Pausable.sol";
 import "./SRC20Detailed.sol";
 import "./ISRC20.sol";
 import "./ISRC20Owned.sol";
@@ -11,6 +10,7 @@ import "./ISRC20Managed.sol";
 import "./Featured.sol";
 import "./AuthorityRole.sol";
 import "./Freezable.sol";
+import "./Pausable.sol";
 import "./DelegateRole.sol";
 import "../rules/ITransferRestriction.sol";
 import "./Managed.sol";
@@ -60,12 +60,9 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     )
     SRC20Detailed(name, symbol, decimals)
     Featured(features)
-    PauserRole()
     public
     {
         _transferOwnership(owner);
-        addPauser(owner);
-        renouncePauser();
 
         _totalSupply = totalSupply;
         _balances[owner] = _totalSupply;
@@ -342,7 +339,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         enabled(Featured.Pausable)
         onlyOwner
     {
-        pause();
+        _pause();
     }
 
     /**
@@ -354,7 +351,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         enabled(Featured.Pausable)
         onlyOwner
     {
-        unpause();
+        _unpause();
     }
 
     // Account token burning management
