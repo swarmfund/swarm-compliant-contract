@@ -15,8 +15,7 @@ contract RestrictionRole {
 
     Roles.Role private _restrictor;
 
-    constructor(address account) public {
-        _restrictor.bearer[account] = true; // @TODO rework this stupid hack
+    constructor() public {
     }
 
     /**
@@ -25,6 +24,17 @@ contract RestrictionRole {
     modifier onlyTransferRestrictor() {
         require(_hasRestrictions(msg.sender));
         _;
+    }
+
+    function addRestrictor(address account) internal {
+        _restrictor.add(account);
+        emit RestrictorAdded(account);
+
+    }
+
+    function removeRestrictor(address account) internal {
+        _restrictor.remove(account);
+        emit RestrictorRemoved(account);
     }
 
     function _hasRestrictions(address account) internal view returns (bool) {

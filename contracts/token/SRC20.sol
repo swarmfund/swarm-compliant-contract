@@ -62,7 +62,6 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
     SRC20Detailed(name, symbol, decimals)
     Featured(features)
     PauserRole()
-    RestrictionRole(restrictions)
     public
     {
         _transferOwnership(owner);
@@ -72,10 +71,6 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
         _totalSupply = totalSupply;
         _balances[owner] = _totalSupply;
         _updateKYA(kyaHash, kyaUrl, restrictions);
-
-        if (restrictions != address(0)) {
-            _restrictions.setSRC(address(this));
-        }
     }
 
     function executeTransfer(address from, address to, uint256 value) external onlyTransferRestrictor returns (bool) {
@@ -123,10 +118,22 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
     function _updateKYA(bytes32 kyaHash, string memory kyaUrl, address restrictions) internal returns (bool) {
         _kya.kyaHash = kyaHash;
         _kya.kyaUrl = kyaUrl;
+
+        if (address(_restrictions) != address(0)) {
+            removeRestrictor(address(_restrictions));
+        }
+
+        if (address(restrictions) != address(0)) {
+            addRestrictor(restrictions);
+        }
+
         _restrictions = TransferRules(restrictions);
 
-        emit KYAUpdated(kyaHash, kyaUrl, restrictions);
+        if (restrictions != address(0)) {
+            _restrictions.setSRC(address(this));
+        }
 
+        emit KYAUpdated(kyaHash, kyaUrl, restrictions);
         return true;
     }
 
