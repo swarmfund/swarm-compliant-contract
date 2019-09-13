@@ -1,6 +1,5 @@
 pragma solidity ^0.5.0;
 
-
 /**
  * @dev Manager is responsible for minting and burning tokens in
  * response to SWM token staking changes.

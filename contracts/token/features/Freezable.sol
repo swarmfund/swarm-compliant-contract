@@ -1,11 +1,13 @@
 pragma solidity ^0.5.0;
 
+import "./IFreezable.sol";
+
 /**
  * @title Freezable account
  * @dev Base contract providing internal methods for freezing,
  * unfreezing and checking accounts' status.
  */
-contract Freezable {
+contract Freezable is IFreezable {
     mapping (address => bool) private _frozen;
 
     event AccountFrozen(address indexed account);

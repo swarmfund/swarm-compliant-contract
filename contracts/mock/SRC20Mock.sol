@@ -1,6 +1,7 @@
 pragma solidity ^0.5.0;
 
 import "../token/SRC20.sol";
+import "../token/features/IFeatured.sol";
 
 
 /**
@@ -22,12 +23,5 @@ contract SRC20Mock is SRC20 {
         SRC20(owner, name, symbol, decimals, kyaHash, kyaUrl, restrictions, features, totalSupply)
         public
     {
-    }
-
-    /**
-     * @dev Setting up features for test cases.
-     */
-    function featureEnable(uint8 features) public {
-        _enable(features);
     }
 }

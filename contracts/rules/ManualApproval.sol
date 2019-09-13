@@ -1,11 +1,11 @@
 pragma solidity ^0.5.0;
 
-import "./ITransferRestriction.sol";
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "./ITransferRules.sol";
 import "../token/ISRC20.sol";
+import "./Whitelisted.sol";
 
 // owner should be authority role in SRC20
-contract ManualApproval is Ownable {
+contract ManualApproval is Whitelisted {
     struct TransferReq {
         address from;
         address to;
@@ -13,7 +13,7 @@ contract ManualApproval is Ownable {
     }
 
     uint256 private _reqNumber;
-    ISRC20 private _src20; // move to aggregator...
+    ISRC20 private _src20;
 
     mapping(uint256 => TransferReq) private _transferReq;
     mapping(address => bool) private _grayList;
@@ -40,6 +40,11 @@ contract ManualApproval is Ownable {
     );
 
     constructor () public {
+    }
+
+    function _setSRO20ManualAllover(address src20) internal returns (bool) {
+        _src20 = ISRC20(src20);
+        return true;
     }
 
     /**

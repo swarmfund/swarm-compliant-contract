@@ -5,6 +5,7 @@ const helpers = require('./helpers');
 const SRC20Registry = artifacts.require('SRC20RegistryMock');
 const SRC20Factory = artifacts.require('SRC20Factory');
 const SRC20 = artifacts.require('SRC20');
+const Featured = artifacts.require('Featured');
 const SwarmTokenMock = artifacts.require('SwarmTokenMock');
 
 contract('SRC20Factory', function ([_, owner, account0, account1]) {

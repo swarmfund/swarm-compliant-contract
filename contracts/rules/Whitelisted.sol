@@ -1,7 +1,6 @@
 pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
-import "./ITransferRestriction.sol";
 import "../token/ISRC20.sol";
 
 /**
@@ -10,9 +9,8 @@ import "../token/ISRC20.sol";
  * of whitelisted addresses manged by owner, and checking
  * that from and to address in src20 transfer are whitelisted.
  */
-contract Whitelisted is ITransferRestriction, Ownable {
+contract Whitelisted is Ownable {
     mapping (address => bool) private _whitelisted;
-
 
     function whitelistAccount(address account) external onlyOwner {
         _whitelisted[account] = true;

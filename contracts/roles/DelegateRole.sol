@@ -2,7 +2,6 @@ pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/access/Roles.sol";
 
-
 /**
  * @title DelegateRole
  * @dev Delegate is accounts allowed to do certain operations on

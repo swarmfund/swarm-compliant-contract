@@ -1,13 +1,13 @@
 pragma solidity ^0.5.0;
 
-import "../rules/ITransferRestriction.sol";
+import "../rules/ITransferRules.sol";
 import "../token/ISRC20.sol";
 
 /**
  * @title TokenDataRestrictionMock contract
  * @dev ITransferRestriction which will pass with token data emitted in event.
  */
-contract TokenDataRestrictionMock is ITransferRestriction {
+contract TokenDataRestrictionMock is ITransferRules {
     ISRC20 _src20;
 
     uint256 totalSupply;

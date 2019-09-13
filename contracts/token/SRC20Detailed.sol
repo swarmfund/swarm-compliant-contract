@@ -1,7 +1,4 @@
-pragma solidity ^0.5.2;
-
-import "./ISRC20.sol";
-
+pragma solidity ^0.5.0;
 
 /**
  * @title SRC20Detailed token

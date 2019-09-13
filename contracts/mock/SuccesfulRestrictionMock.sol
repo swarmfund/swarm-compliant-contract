@@ -1,13 +1,13 @@
 pragma solidity ^0.5.0;
 
-import "../rules/ITransferRestriction.sol";
+import "../rules/ITransferRules.sol";
 import "../token/SRC20.sol";
 
 /**
  * @title SuccessfulRestrictionMock contract
  * @dev ITransferRestriction which will pass.
  */
-contract SuccessfulRestrictionMock is ITransferRestriction {
+contract SuccessfulRestrictionMock is ITransferRules {
     function setSRC(address src20) external returns (bool) {
         return true;
     }

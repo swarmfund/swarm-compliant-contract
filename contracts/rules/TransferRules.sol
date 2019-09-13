@@ -1,9 +1,10 @@
-pragma solidity ^0.5.10;
+pragma solidity ^0.5.0;
 
 import "./ManualApproval.sol";
 import "./Whitelisted.sol";
+import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
-contract TransferRules is ITransferRestriction, ManualApproval, Whitelisted {
+contract TransferRules is ITransferRules, ManualApproval {
     address private _src20;
 
     modifier onlySRC20 {
@@ -14,6 +15,7 @@ contract TransferRules is ITransferRestriction, ManualApproval, Whitelisted {
     function setSRC(address src20) external returns (bool) {
         require(_src20 == address(0), "SRC20 already set");
         _src20 = src20;
+        _setSRO20ManualAllover(_src20);
         return true;
     }
 

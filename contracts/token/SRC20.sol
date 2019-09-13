@@ -3,19 +3,17 @@ pragma solidity ^0.5.0;
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
-import "openzeppelin-solidity/contracts/lifecycle/Pausable.sol";
 import "./SRC20Detailed.sol";
 import "./ISRC20.sol";
 import "./ISRC20Owned.sol";
 import "./ISRC20Managed.sol";
-import "./Featured.sol";
-import "./Freezable.sol";
-import "../rules/ITransferRestriction.sol";
+import "../rules/ITransferRules.sol";
 import "./Managed.sol";
 import "../roles/DelegateRole.sol";
 import "../roles/AuthorityRole.sol";
-import "../roles/RestrictionRole.sol";
-import "../rules/TransferRules.sol";
+import "./features/Featured.sol";
+import "./features/Pausable.sol";
+import "./features/Freezable.sol";
 
 
 /**
@@ -23,7 +21,7 @@ import "../rules/TransferRules.sol";
  * @dev Base SRC20 contract.
  */
 contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
-Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Managed {
+AuthorityRole, DelegateRole, Ownable, Managed {
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
@@ -45,7 +43,9 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
      * If set, transferToken will consult this contract should transfer
      * be allowed after successful authorization signature check.
      */
-    TransferRules private _restrictions;
+    ITransferRules private _restrictions;
+
+    Featured private _featured;
 
     // Constructors
     constructor(
@@ -61,19 +61,16 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
     )
     SRC20Detailed(name, symbol, decimals)
     Featured(features)
-    PauserRole()
     public
     {
         _transferOwnership(owner);
-        addPauser(owner);
-        renouncePauser();
 
         _totalSupply = totalSupply;
         _balances[owner] = _totalSupply;
         _updateKYA(kyaHash, kyaUrl, restrictions);
     }
 
-    function executeTransfer(address from, address to, uint256 value) external onlyTransferRestrictor returns (bool) {
+    function executeTransfer(address from, address to, uint256 value) external onlyAuthority returns (bool) {
         _transfer(from, to, value);
         return true;
     }
@@ -119,15 +116,7 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
         _kya.kyaHash = kyaHash;
         _kya.kyaUrl = kyaUrl;
 
-        if (address(_restrictions) != address(0)) {
-            removeRestrictor(address(_restrictions));
-        }
-
-        if (address(restrictions) != address(0)) {
-            addRestrictor(restrictions);
-        }
-
-        _restrictions = TransferRules(restrictions);
+        _restrictions = ITransferRules(restrictions);
 
         if (restrictions != address(0)) {
             _restrictions.setSRC(address(this));
@@ -226,7 +215,7 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
      *
      * @return Nonce for next transfer function.
      */
-    function getTransferNonce() public view returns (uint256) {
+    function getTransferNonce() external view returns (uint256) {
         return _nonce[msg.sender];
     }
 
@@ -235,7 +224,7 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
      *
      * @return Nonce for next transfer function.
      */
-    function getTransferNonce(address account) public view returns (uint256) {
+    function getTransferNonce(address account) external view returns (uint256) {
         return _nonce[account];
     }
 
@@ -248,7 +237,7 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
      *
      * @return True if specified account is authority account.
      */
-    function isAuthority(address account) public view returns (bool) {
+    function isAuthority(address account) external view returns (bool) {
         return _hasAuthority(account);
     }
 
@@ -275,7 +264,7 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
      *
      * @return True if specified account is delegate account.
      */
-    function isDelegate(address account) public view returns (bool) {
+    function isDelegate(address account) external view returns (bool) {
         return _hasDelegate(account);
     }
 
@@ -311,7 +300,7 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
      *
      * @return True if account is frozen.
      */
-    function isAccountFrozen(address account) public view returns (bool) {
+    function isAccountFrozen(address account) external view returns (bool) {
         return _isAccountFrozen(account);
     }
 
@@ -360,7 +349,7 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
     enabled(Featured.Pausable)
     onlyOwner
     {
-        pause();
+        _pause();
     }
 
     /**
@@ -372,7 +361,7 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
     enabled(Featured.Pausable)
     onlyOwner
     {
-        unpause();
+        _unpause();
     }
 
     // Account token burning management
@@ -464,11 +453,7 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
     }
 
     function transfer(address to, uint256 value) external returns (bool) {
-        require(!isTokenPaused(), "Token is frozen!");
-        require(!_isAccountFrozen(msg.sender), "From account is frozen!");
-        require(!_isAccountFrozen(to), "To account is frozen!");
-
-        if (_restrictions != TransferRules(0)) {
+        if (_restrictions != ITransferRules(0)) {
             require(_restrictions.authorize(msg.sender, to, value), "Transfer not authorized");
 
             _restrictions.doTransfer(msg.sender, to, value);
@@ -480,11 +465,7 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
     }
 
     function transferFrom(address from, address to, uint256 value) external returns (bool) {
-        require(!isTokenPaused(), "Token is frozen!");
-        require(!_isAccountFrozen(from), "From account is frozen!");
-        require(!_isAccountFrozen(to), "To account is frozen!");
-
-        if (_restrictions != TransferRules(0)) {
+        if (_restrictions != ITransferRules(0)) {
             require(_restrictions.authorize(from, to, value), "Transfer not authorized");
 
             _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
@@ -546,10 +527,6 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
     )
     internal returns (bool)
     {
-        require(!isTokenPaused(), "Token is frozen!");
-        require(!_isAccountFrozen(from), "From account is frozen!");
-        require(!_isAccountFrozen(to), "To account is frozen!");
-
         if (address(_restrictions) != address(0)) {
             require(_restrictions.authorize(from, to, value), "transferToken restrictions failed");
         }
@@ -574,6 +551,10 @@ Pausable, Freezable, AuthorityRole, DelegateRole, RestrictionRole, Ownable, Mana
      * @param value The amount to be transferred.
      */
     function _transfer(address from, address to, uint256 value) internal {
+        require(!isTokenPaused(), "Token is frozen!");
+        require(!_isAccountFrozen(from), "From account is frozen!");
+        require(!_isAccountFrozen(to), "To account is frozen!");
+
         require(to != address(0));
 
         _balances[from] = _balances[from].sub(value);

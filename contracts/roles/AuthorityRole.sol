@@ -9,11 +9,19 @@ import "openzeppelin-solidity/contracts/access/Roles.sol";
  */
 contract AuthorityRole {
     using Roles for Roles.Role;
-    
+
     event AuthorityAdded(address indexed account);
     event AuthorityRemoved(address indexed account);
 
     Roles.Role private _authorities;
+
+    /**
+    * @dev Throws if called by any account other than the delegate.
+    */
+    modifier onlyAuthority() {
+        require(_hasAuthority(msg.sender));
+        _;
+    }
 
     function _addAuthority(address account) internal {
         _authorities.add(account);

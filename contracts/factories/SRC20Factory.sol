@@ -61,7 +61,6 @@ contract SRC20Factory is Ownable {
         SRC20(token).transferManagement(address(_registry));
 
         emit SRC20Created(token);
-
         return true;
     }
 }
