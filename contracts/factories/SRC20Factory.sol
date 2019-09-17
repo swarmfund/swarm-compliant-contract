@@ -2,7 +2,8 @@ pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "../token/SRC20.sol";
-import "./SRC20Registry.sol";
+import "./ISRC20Registry.sol";
+import "../roles/IRoles.sol";
 
 
 /**
@@ -10,7 +11,7 @@ import "./SRC20Registry.sol";
  * properties and features.
  */
 contract SRC20Factory is Ownable {
-    SRC20Registry private _registry; 
+    ISRC20Registry private _registry;
 
     event SRC20Created(address token);
 
@@ -19,8 +20,8 @@ contract SRC20Factory is Ownable {
      * Every created token will be registered in registry.
      * @param registry address of SRC20Registry contract.
      */
-    constructor(SRC20Registry registry) public {
-        _registry = registry;
+    constructor(address registry) public {
+        _registry = ISRC20Registry(registry);
     }
 
     /**
@@ -29,6 +30,7 @@ contract SRC20Factory is Ownable {
      * this function.
      * Emits SRC20Created event with address of new token.
      */
+    event test(bool aaa);
     function create(
         // contract parameters
         address tokenOwner,
@@ -38,6 +40,7 @@ contract SRC20Factory is Ownable {
         bytes32 kyaHash,
         string memory kyaUrl,
         address restrictions,
+        address roles,
         uint8 features,
         uint256 totalSupply
     ) 
@@ -52,13 +55,14 @@ contract SRC20Factory is Ownable {
             kyaHash,
             kyaUrl,
             restrictions,
+            roles,
             features,
             totalSupply
         ));
 
-        _registry.put(token, tokenOwner);
+        _registry.put(token, roles, tokenOwner);
 
-        SRC20(token).transferManagement(address(_registry));
+//      transfer managership to contract that will handle staking/minting - currently manual
 
         emit SRC20Created(token);
         return true;

@@ -1,6 +1,7 @@
 pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/access/Roles.sol";
+import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 
 /**
@@ -14,14 +15,6 @@ contract AuthorityRole {
     event AuthorityRemoved(address indexed account);
 
     Roles.Role private _authorities;
-
-    /**
-    * @dev Throws if called by any account other than the delegate.
-    */
-    modifier onlyAuthority() {
-        require(_hasAuthority(msg.sender));
-        _;
-    }
 
     function _addAuthority(address account) internal {
         _authorities.add(account);

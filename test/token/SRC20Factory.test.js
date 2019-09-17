@@ -7,8 +7,9 @@ const SRC20Factory = artifacts.require('SRC20Factory');
 const SRC20 = artifacts.require('SRC20');
 const Featured = artifacts.require('Featured');
 const SwarmTokenMock = artifacts.require('SwarmTokenMock');
+const SRC20Roles = artifacts.require('SRC20Roles');
 
-contract('SRC20Factory', function ([_, owner, account0, account1]) {
+contract('SRC20Factory', function ([_, owner, account0, account1, account2]) {
   const kyaHash = crypto.createHash('sha256').update(constants.ZERO_ADDRESS).digest();
   const kyaUrl = 'https://www.mvpworkshop.co';
   const swmTotalSupply = new BN(1000000).mul(new BN(10).pow(new BN(36)));
@@ -21,6 +22,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
     this.swarmTokenMock = await SwarmTokenMock.new(account0, swmTotalSupply, {from: owner});
     this.registry = await SRC20Registry.new(this.swarmTokenMock.address, {from: owner});
     this.factory = await SRC20Factory.new(this.registry.address, {from: owner});
+    this.roles = await SRC20Roles.new({from: owner});
 
     await this.registry.addFactory(this.factory.address, {from: owner});
 
@@ -32,10 +34,13 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       kyaHash,
       kyaUrl,
       constants.ZERO_ADDRESS,
+      this.roles.address,
       features,
       srcTotalSupply,
       {from: owner}
     );
+
+    this.roles.transferManagement(this.registry.address, {from: owner}); // @TODO move this to contract
 
     this.unregisteredToken = await SRC20.new(
       account0,
@@ -45,6 +50,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       kyaHash,
       kyaUrl,
       constants.ZERO_ADDRESS,
+      this.roles.address,
       features,
       srcTotalSupply,
       {from: owner}
@@ -59,7 +65,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
 
   describe('Keeping SRC20 tokens in registry', function () {
     it('should allow only factory to register tokens', async function () {
-      await shouldFail.reverting.withMessage(this.registry.put(account0, account1, {from: owner}),
+      await shouldFail.reverting.withMessage(this.registry.put(account0, account1, account2, {from: owner}),
         "factory not registered"
       );
     });
@@ -363,14 +369,14 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
     it('should be able to transfer management to another manager contract', async function () {
       await this.registry.transferManagement(this.token.address, account0, {from: owner});
 
-      const manager = await this.token.manager();
+      const manager = await this.roles.manager();
       assert.equal(account0 === manager, true);
     });
 
     it('should be able to renounce management', async function () {
       await this.registry.renounceManagement(this.token.address, {from: owner});
 
-      const manager = await this.token.manager();
+      const manager = await this.roles.manager();
       assert.equal(manager === constants.ZERO_ADDRESS, true);
     });
   });

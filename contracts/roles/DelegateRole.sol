@@ -9,7 +9,7 @@ import "openzeppelin-solidity/contracts/access/Roles.sol";
  */
 contract DelegateRole {
     using Roles for Roles.Role;
-    
+
     event DelegateAdded(address indexed account);
     event DelegateRemoved(address indexed account);
 

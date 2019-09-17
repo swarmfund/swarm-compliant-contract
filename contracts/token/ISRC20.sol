@@ -17,7 +17,6 @@ interface ISRC20 {
         uint256 expirationTime, bytes32 hash, bytes calldata signature) external returns (bool);
 
     function getTransferNonce() external view returns (uint256);
-    function isAuthority(address account) external view returns (bool);
     function isTokenPaused() external view returns (bool);
     function isAccountFrozen(address account) external view returns (bool);
 

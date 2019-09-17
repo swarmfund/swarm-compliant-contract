@@ -9,7 +9,7 @@
     "ethereumjs-abi": "^0.6.7",
     "moment": "^2.24.0",
     "node-gyp": "^5.0.3",
-    "openzeppelin-solidity": "^2.2.0",
+    "openzeppelin-solidity": "^2.3.0",
     "openzeppelin-test-helpers": "^0.3.2",
     "web3": "1.0.0-beta.47"
   },

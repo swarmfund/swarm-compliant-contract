@@ -31,6 +31,10 @@ contract TokenDataRestrictionMock is ITransferRules {
         return true;
     }
 
+    function doTransfer(address from, address to, uint256 value) external returns (bool) {
+        return true;
+    }
+
     function emitTokenData() external returns (bool) {
         emit TokenData(totalSupply, balance, nonce);
         return true;

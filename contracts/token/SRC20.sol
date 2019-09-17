@@ -8,20 +8,17 @@ import "./ISRC20.sol";
 import "./ISRC20Owned.sol";
 import "./ISRC20Managed.sol";
 import "../rules/ITransferRules.sol";
-import "./Managed.sol";
-import "../roles/DelegateRole.sol";
-import "../roles/AuthorityRole.sol";
 import "./features/Featured.sol";
 import "./features/Pausable.sol";
 import "./features/Freezable.sol";
+import "../roles/IRoles.sol";
 
 
 /**
  * @title SRC20 contract
  * @dev Base SRC20 contract.
  */
-contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
-AuthorityRole, DelegateRole, Ownable, Managed {
+contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured, Ownable {
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
@@ -38,6 +35,8 @@ AuthorityRole, DelegateRole, Ownable, Managed {
 
     KYA private _kya;
 
+    IRoles private _roles;
+
     /**
      * @description Configured contract implementing token restriction(s).
      * If set, transferToken will consult this contract should transfer
@@ -45,7 +44,20 @@ AuthorityRole, DelegateRole, Ownable, Managed {
      */
     ITransferRules private _restrictions;
 
-    Featured private _featured;
+     modifier onlyAuthority() {
+        require(_roles.isAuthority(msg.sender), "Caller not authority");
+        _;
+    }
+
+    modifier onlyDelegate() {
+        require(_roles.isDelegate(msg.sender), "Caller not delegate");
+        _;
+    }
+
+    modifier onlyManager() {
+        require(_roles.isManager(msg.sender), "Caller not manager");
+        _;
+    }
 
     // Constructors
     constructor(
@@ -56,6 +68,7 @@ AuthorityRole, DelegateRole, Ownable, Managed {
         bytes32 kyaHash,
         string memory kyaUrl,
         address restrictions,
+        address roles,
         uint8 features,
         uint256 totalSupply
     )
@@ -68,6 +81,8 @@ AuthorityRole, DelegateRole, Ownable, Managed {
         _totalSupply = totalSupply;
         _balances[owner] = _totalSupply;
         _updateKYA(kyaHash, kyaUrl, restrictions);
+
+        _roles = IRoles(roles);
     }
 
     function executeTransfer(address from, address to, uint256 value) external onlyAuthority returns (bool) {
@@ -88,7 +103,7 @@ AuthorityRole, DelegateRole, Ownable, Managed {
      * or address(0) if no rules should be checked on chain.
      * @return True on success.
      */
-    function updateKYA(bytes32 kyaHash, string calldata kyaUrl, address restrictions) external onlyOwnerOrDelegate returns (bool) {
+    function updateKYA(bytes32 kyaHash, string calldata kyaUrl, address restrictions) external onlyDelegate returns (bool) {
         return _updateKYA(kyaHash, kyaUrl, restrictions);
     }
 
@@ -226,70 +241,6 @@ AuthorityRole, DelegateRole, Ownable, Managed {
      */
     function getTransferNonce(address account) external view returns (uint256) {
         return _nonce[account];
-    }
-
-
-    // Authority management
-    /**
-     * @dev Check if specified account is authority. Authorities are accounts
-     * that can sign token transfer request, usually after off-chain token restriction
-     * checks.
-     *
-     * @return True if specified account is authority account.
-     */
-    function isAuthority(address account) external view returns (bool) {
-        return _hasAuthority(account);
-    }
-
-    /**
-     * @dev Add account to token authorities list.
-     * Emits AuthorityAdded event.
-     */
-    function addAuthority(address account) external onlyOwner {
-        _addAuthority(account);
-    }
-
-    /**
-     * @dev Removes account from token authorities list.
-     * Emits AuthorityRemoved event.
-     */
-    function removeAuthority(address account) external onlyOwner {
-        _removeAuthority(account);
-    }
-
-    // Delegate management
-    /**
-     * @dev Check if specified account is delegate. Delegate is accounts
-     * allowed to do certain operations on contract, apart from owner.
-     *
-     * @return True if specified account is delegate account.
-     */
-    function isDelegate(address account) external view returns (bool) {
-        return _hasDelegate(account);
-    }
-
-    /**
-     * @dev Add account to token delegates list.
-     * Emits DelegateAdded event.
-     */
-    function addDelegate(address account) external onlyOwner {
-        _addDelegate(account);
-    }
-
-    /**
-     * @dev Removes account from token delegates list.
-     * Emits DelegateRemoved event.
-     */
-    function removeDelegate(address account) external onlyOwner {
-        _removeDelegate(account);
-    }
-
-    /**
-     * @dev Throws if caller by other than owner or delegate.
-     */
-    modifier onlyOwnerOrDelegate() {
-        require(isOwner() || _hasDelegate(msg.sender), "Not Owner or Delegate");
-        _;
     }
 
     // Account and token freezing management
@@ -537,7 +488,7 @@ AuthorityRole, DelegateRole, Ownable, Managed {
             keccak256(abi.encodePacked(_kya.kyaHash, from, to, value, nonce, expirationTime)) == hash,
             "transferToken params bad hash"
         );
-        require(_hasAuthority(hash.toEthSignedMessageHash().recover(signature)), "transferToken params not authority");
+        require(_roles.isAuthority(hash.toEthSignedMessageHash().recover(signature)), "transferToken params not authority");
 
         _transfer(from, to, value);
 

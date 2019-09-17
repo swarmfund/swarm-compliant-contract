@@ -17,11 +17,19 @@ contract SRC20Mock is SRC20 {
         bytes32 kyaHash,
         string memory kyaUrl,
         address restrictions,
+        address roles,
         uint8 features,
         uint256 totalSupply
     )
-        SRC20(owner, name, symbol, decimals, kyaHash, kyaUrl, restrictions, features, totalSupply)
+        SRC20(owner, name, symbol, decimals, kyaHash, kyaUrl, restrictions, roles, features, totalSupply)
         public
     {
+    }
+
+    /**
+     * @dev Setting up features for test cases.
+     */
+    function featureEnable(uint8 features) public {
+        _enable(features);
     }
 }

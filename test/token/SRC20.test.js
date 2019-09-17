@@ -7,6 +7,7 @@ const SRC20 = artifacts.require('SRC20Mock');
 const FailedRestriction = artifacts.require('FailedRestrictionMock');
 const SuccessfulRestriction = artifacts.require('SuccessfulRestrictionMock');
 const TokenDataRestrictionMock = artifacts.require('TokenDataRestrictionMock');
+const SRC20Roles = artifacts.require('SRC20Roles');
 
 
 contract('SRC20', async function ([_, manager, owner, authority0, authority1, account0, account1, delegate0]) {
@@ -24,6 +25,9 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
     this.successfulRestriction = await SuccessfulRestriction.new();
     this.tokenDataRestrictionMock = await TokenDataRestrictionMock.new();
 
+    this.roles = await SRC20Roles.new({from: owner});
+    await this.roles.transferManagement(manager, {from: owner});
+
     this.token = await SRC20.new(
       owner,
       'SRC20 token',
@@ -32,6 +36,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
       kyaHash,
       kyaUrl,
       constants.ZERO_ADDRESS,
+      this.roles.address,
       features,
       totalSupply,
       {from: manager}
@@ -50,48 +55,49 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
     });
 
     it('should allow owner to add/remove and query delegates', async function () {
-      ({logs: this.logs} = await this.token.addDelegate(delegate0, {from: owner}));
+      ({logs: this.logs} = await this.roles.addDelegate(delegate0, {from: owner}));
       expectEvent.inLogs(this.logs, 'DelegateAdded', {
         account: delegate0
       });
 
-      assert.equal(await this.token.isDelegate(delegate0), true);
+      assert.equal(await this.roles.isDelegate(delegate0), true);
 
-      ({logs: this.logs} = await this.token.removeDelegate(delegate0, {from: owner}));
+      ({logs: this.logs} = await this.roles.removeDelegate(delegate0, {from: owner}));
       expectEvent.inLogs(this.logs, 'DelegateRemoved', {
         account: delegate0
       });
 
-      assert.equal(await this.token.isDelegate(delegate0), false);
+      assert.equal(await this.roles.isDelegate(delegate0), false);
     });
 
     it('should allow authorities to be added and queried', async function () {
-      await this.token.addAuthority(authority0, {from: owner});
-      assert.equal(await this.token.isAuthority(authority0), true);
-      assert.equal(await this.token.isAuthority(authority1), false);
+      await this.roles.addAuthority(authority0, {from: owner});
+      assert.equal(await this.roles.isAuthority(authority0), true);
+      assert.equal(await this.roles.isAuthority(authority1), false);
     });
 
     it('should allow only owner to handle authorities', async function () {
-      await this.token.addAuthority(authority0, {from: owner});
-      await shouldFail.reverting(this.token.addAuthority(authority1, {from: authority0}));
+      await this.roles.addAuthority(authority0, {from: owner});
+      await shouldFail.reverting(this.roles.addAuthority(authority1, {from: authority0}));
 
-      await this.token.addAuthority(authority1, {from: owner});
-      await this.token.removeAuthority(authority1, {from: owner});
-      await shouldFail.reverting(this.token.removeAuthority(authority0, {from: authority1}));
+      await this.roles.addAuthority(authority1, {from: owner});
+      await this.roles.removeAuthority(authority1, {from: owner});
+      await shouldFail.reverting(this.roles.removeAuthority(authority0, {from: authority1}));
     });
 
     it('should fire events on adding and removing authority', async function () {
-      ({logs: this.logs} = await this.token.addAuthority(authority0, {from: owner}));
+      ({logs: this.logs} = await this.roles.addAuthority(authority0, {from: owner}));
       expectEvent.inLogs(this.logs, 'AuthorityAdded', {account: authority0});
 
-      ({logs: this.logs} = await this.token.removeAuthority(authority0, {from: owner}));
+      ({logs: this.logs} = await this.roles.removeAuthority(authority0, {from: owner}));
       expectEvent.inLogs(this.logs, 'AuthorityRemoved', {account: authority0});
     });
   });
 
   describe('Handling KYA updates and delegates', function () {
     it('should change KYA data and return changed data to owner', async function () {
-      ({logs: this.logs} = await this.token.updateKYA(kyaHash, kyaUrl, constants.ZERO_ADDRESS, {from: owner}));
+      await this.roles.addDelegate(delegate0, {from: owner});
+      ({logs: this.logs} = await this.token.updateKYA(kyaHash, kyaUrl, constants.ZERO_ADDRESS, {from: delegate0}));
 
       expectEvent.inLogs(this.logs, 'KYAUpdated', {
         kyaHash: helpers.utils.bufferToHex(kyaHash),
@@ -104,8 +110,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
     });
 
     it('should allow updating KYA to delegate', async function () {
-      await this.token.addDelegate(delegate0, {from: owner});
-
+      await this.roles.addDelegate(delegate0, {from: owner});
       ({logs: this.logs} = await this.token.updateKYA(kyaHash, kyaUrl, constants.ZERO_ADDRESS, {from: delegate0}));
 
       expectEvent.inLogs(this.logs, 'KYAUpdated', {
@@ -116,13 +121,13 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
 
     it('should not allow updating KYA from public account', async function () {
       await shouldFail.reverting.withMessage(this.token.updateKYA(kyaHash, kyaUrl, constants.ZERO_ADDRESS, {from: delegate0}),
-        "Not Owner or Delegate");
+        "Caller not delegate");
     });
   });
 
   describe('Handling transferToken with rules', async function () {
     it('should allow transfer with authorization signature from authority', async function () {
-      await this.token.addAuthority(accounts.ACCOUNT0.address, {from: owner});
+      await this.roles.addAuthority(accounts.ACCOUNT0.address, {from: owner});
 
       const nonce = await this.token.getTransferNonce({from: owner});
       const {hash, signature} = signTransfer(kyaHash, owner, account0, value, nonce, expDate, accounts.ACCOUNT0.privateKey);
@@ -136,7 +141,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
     });
 
     it('should not allow authorization signature from not authority account', async function () {
-      await this.token.addAuthority(accounts.ACCOUNT0.address, {from: owner});
+      await this.roles.addAuthority(accounts.ACCOUNT0.address, {from: owner});
 
       const nonce = await this.token.getTransferNonce({from: owner});
       const {hash, signature} = signTransfer(kyaHash, owner, account0, value, nonce, expDate, accounts.ACCOUNT1.privateKey);
@@ -146,7 +151,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
     });
 
     it('should not allow signature for different account', async function () {
-      await this.token.addAuthority(accounts.ACCOUNT0.address, {from: owner});
+      await this.roles.addAuthority(accounts.ACCOUNT0.address, {from: owner});
 
       const nonce = await this.token.getTransferNonce({from: owner});
       const {hash, signature} = signTransfer(kyaHash, owner, account0, value, nonce, expDate, accounts.ACCOUNT0.privateKey);
@@ -189,7 +194,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
     it('should successfully approve and transferred all approved tokens', async function () {
       await this.token.approve(account0, value, {from: owner});
 
-      await this.token.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
+      await this.roles.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
 
       const nonce = await this.token.getTransferNonce({from: owner});
       const {hash, signature} = helpers.utils.signTransfer(kyaHash, owner, account1, value, nonce, expDate, helpers.accounts.ACCOUNT0.privateKey);
@@ -205,7 +210,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
     it('should allow spending approved tokens with multiple transfers', async function () {
       await this.token.approve(account0, value, {from: owner});
 
-      await this.token.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
+      await this.roles.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
 
       let nonce = await this.token.getTransferNonce({from: owner});
       let {hash, signature} = helpers.utils.signTransfer(kyaHash, owner, account1, value / 2, nonce, expDate,
@@ -235,7 +240,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
     it('should increase allowance increaseAllowance', async function () {
       await this.token.increaseAllowance(account0, value, {from: owner});
 
-      await this.token.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
+      await this.roles.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
 
       const nonce = await this.token.getTransferNonce({from: owner});
       const {hash, signature} = helpers.utils.signTransfer(kyaHash, owner, account1, value, nonce, expDate, helpers.accounts.ACCOUNT0.privateKey);
@@ -252,7 +257,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
       await this.token.increaseAllowance(account0, value, {from: owner});
       await this.token.decreaseAllowance(account0, value, {from: owner});
 
-      await this.token.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
+      await this.roles.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
 
       const nonce = await this.token.getTransferNonce({from: owner});
       const {hash, signature} = helpers.utils.signTransfer(kyaHash, owner, account1, 1, nonce, expDate, helpers.accounts.ACCOUNT0.privateKey);
@@ -276,7 +281,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
 
     it('should not allow forceTransfer with feature disabled', async function () {
       await shouldFail.reverting.withMessage(this.token.transferTokenForced(owner, account0, value, {from: owner}),
-        "Feature not enabled");
+        "Token feature is not enabled");
     });
 
     it('should allow token pausing if feature enabled', async function () {
@@ -305,16 +310,22 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
 
     });
 
-    it('should not allow token pausing if caller is not owner');
+    it('should not allow token pausing if caller is not owner', async function () {
+      const pausable = await this.token.Pausable();
+      await this.token.featureEnable(pausable);
+
+      await shouldFail.reverting.withMessage(this.token.pauseToken({from: account1}),
+          "Ownable: caller is not the owner");
+    });
 
     it('should not allow token pausing if feature disabled', async function () {
       await shouldFail.reverting.withMessage(this.token.pauseToken({from: owner}),
-        "Feature not enabled");
+        "Token feature is not enabled");
     });
 
     it('should not allow account freezing if feature disabled', async function () {
       await shouldFail.reverting.withMessage(this.token.freezeAccount(account0, {from: owner}),
-          "Feature not enabled");
+          "Token feature is not enabled");
     });
 
 
@@ -336,7 +347,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
 
   describe('Handling of on-chain transfer rules', function () {
     it('should allow transfer without on-chain restrictions', async function () {
-      await this.token.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
+      await this.roles.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
 
       const nonce = await this.token.getTransferNonce({from: owner});
       const {hash, signature} = helpers.utils.signTransfer(kyaHash, owner, account0, value, nonce, expDate, helpers.accounts.ACCOUNT0.privateKey);
@@ -350,9 +361,10 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
     });
 
     it('should allow transfer with successful on-chain restrictions', async function () {
-      await this.token.updateKYA(kyaHash, kyaUrl, this.successfulRestriction.address, {from: owner});
+      await this.roles.addDelegate(delegate0, {from: owner});
+      await this.token.updateKYA(kyaHash, kyaUrl, this.successfulRestriction.address, {from: delegate0});
 
-      await this.token.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
+      await this.roles.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
 
       const nonce = await this.token.getTransferNonce({from: owner});
       const {hash, signature} = helpers.utils.signTransfer(kyaHash, owner, account0, value, nonce, expDate, helpers.accounts.ACCOUNT0.privateKey);
@@ -366,9 +378,10 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
     });
 
     it('should not allow transfer with failed on-chain restrictions', async function () {
-      await this.token.updateKYA(kyaHash, kyaUrl, this.failedRestriction.address, {from: owner});
+      await this.roles.addDelegate(delegate0, {from: owner});
+      await this.token.updateKYA(kyaHash, kyaUrl, this.failedRestriction.address, {from: delegate0});
 
-      await this.token.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
+      await this.roles.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
 
       const nonce = await this.token.getTransferNonce({from: owner});
       const {hash, signature} = helpers.utils.signTransfer(kyaHash, owner, account0, value, nonce, expDate, helpers.accounts.ACCOUNT0.privateKey);
@@ -378,9 +391,10 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
     });
 
     it('should be able to present token data to on-chain rule contract', async function () {
-      await this.token.updateKYA(kyaHash, kyaUrl, this.tokenDataRestrictionMock.address, {from: owner});
+      await this.roles.addDelegate(delegate0, {from: owner});
+      await this.token.updateKYA(kyaHash, kyaUrl, this.tokenDataRestrictionMock.address, {from: delegate0});
 
-      await this.token.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
+      await this.roles.addAuthority(helpers.accounts.ACCOUNT0.address, {from: owner});
 
       const nonce0 = await this.token.getTransferNonce({from: owner});
       const {hash: hash0, signature: signature0} = helpers.utils.signTransfer(kyaHash, owner, account0, value, nonce0, expDate,
