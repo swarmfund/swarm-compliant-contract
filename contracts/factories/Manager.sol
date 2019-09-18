@@ -3,9 +3,9 @@ pragma solidity ^0.5.0;
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
-import "../token/ISRC20.sol";
-import "../token/ISRC20Managed.sol";
-import "../roles/IRoles.sol";
+import "../interfaces/ISRC20.sol";
+import "../interfaces/ISRC20Managed.sol";
+import "../interfaces/IRoles.sol";
 
 
 /**

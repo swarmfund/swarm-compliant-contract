@@ -3,7 +3,7 @@ pragma solidity ^0.5.0;
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/access/Roles.sol";
 import "./Manager.sol";
-import "./ISRC20Registry.sol";
+import "../interfaces/ISRC20Registry.sol";
 
 
 /**

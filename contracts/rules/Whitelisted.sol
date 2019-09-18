@@ -1,7 +1,7 @@
 pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
-import "../token/ISRC20.sol";
+import "../interfaces/ISRC20.sol";
 
 /**
  * @title Whitelisted transfer restriction example

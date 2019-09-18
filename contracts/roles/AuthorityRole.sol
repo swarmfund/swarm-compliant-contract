@@ -6,7 +6,8 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 /**
  * @title AuthorityRole
- * @dev Authorities that can sign transfer signatures.
+ * @dev Authority is roles responsible for signing/approving token transfers
+ * on-chain & off-chain
  */
 contract AuthorityRole {
     using Roles for Roles.Role;

@@ -7,7 +7,7 @@ pragma solidity ^0.5.0;
  * This module is used through inheritance. It will make available the
  * modifiers `whenNotPaused` and `whenPaused`, which can be applied to
  * the functions of your contract. Note that they will not be pausable by
- * simply including this module, only once the modifiers are put in place.
+ * simply including this module, only once the functions are implemented.
  */
 contract IPausable{
     event Paused(address account);

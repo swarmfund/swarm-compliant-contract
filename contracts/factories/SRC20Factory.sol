@@ -2,7 +2,7 @@ pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "../token/SRC20.sol";
-import "./ISRC20Registry.sol";
+import "../interfaces/ISRC20Registry.sol";
 
 /**
  * @dev Factory that creates SRC20 token for requested token
@@ -59,7 +59,7 @@ contract SRC20Factory is Ownable {
 
         _registry.put(token, roles, tokenOwner);
 
-//      transfer managership to contract that will handle staking/minting - currently manual
+//      transfer managership from owner to contract that will handle staking/minting - currently manual
 
         emit SRC20Created(token);
         return true;

@@ -1,6 +1,6 @@
 pragma solidity ^0.5.0;
 
-import "../rules/ITransferRules.sol";
+import "../interfaces/ITransferRules.sol";
 
 /**
  * @title FailedRestrictionMock contract

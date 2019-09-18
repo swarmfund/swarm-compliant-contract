@@ -4,8 +4,12 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "./DelegateRole.sol";
 import "./AuthorityRole.sol";
 import "./Managed.sol";
-import "./IRoles.sol";
+import "../interfaces/IRoles.sol";
 
+/*
+ * @title SRC20Roles contract
+ * @dev Roles wrapper contract around all roles needed for SRC20 contract.
+ */
 contract SRC20Roles is IRoles, DelegateRole, AuthorityRole, Managed, Ownable {
     constructor() public {
     }

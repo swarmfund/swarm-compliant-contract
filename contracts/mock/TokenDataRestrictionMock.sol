@@ -1,7 +1,7 @@
 pragma solidity ^0.5.0;
 
-import "../rules/ITransferRules.sol";
-import "../token/ISRC20.sol";
+import "../interfaces/ITransferRules.sol";
+import "../interfaces/ISRC20.sol";
 
 /**
  * @title TokenDataRestrictionMock contract

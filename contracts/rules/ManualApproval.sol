@@ -1,11 +1,16 @@
 pragma solidity ^0.5.0;
 
-import "./ITransferRules.sol";
-import "../token/ISRC20.sol";
-import "./Whitelisted.sol";
+import "../interfaces/ITransferRules.sol";
+import "../interfaces/ISRC20.sol";
+import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 // owner should be authority role in SRC20
-contract ManualApproval is Whitelisted {
+/*
+ * @title ManualApproval contract
+ * @dev On-chain transfer rule that is handling transfer request/execution for
+ * gray-listed account
+ */
+contract ManualApproval is Ownable {
     struct TransferReq {
         address from;
         address to;

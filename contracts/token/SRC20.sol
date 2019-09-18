@@ -4,12 +4,13 @@ import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
 import "./SRC20Detailed.sol";
-import "./ISRC20.sol";
-import "./ISRC20Owned.sol";
-import "./ISRC20Managed.sol";
-import "../rules/ITransferRules.sol";
-import "./features/IFeatured.sol";
-import "../roles/IRoles.sol";
+import "../interfaces/ISRC20.sol";
+import "../interfaces/ISRC20Owned.sol";
+import "../interfaces/ISRC20Managed.sol";
+import "../interfaces/ITransferRules.sol";
+import "../interfaces/IFeatured.sol";
+import "../interfaces/IRoles.sol";
+import "../interfaces/ISRC20.sol";
 
 
 /**

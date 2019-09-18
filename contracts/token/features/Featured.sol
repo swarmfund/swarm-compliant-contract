@@ -1,7 +1,7 @@
 pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
-import "./IFeatured.sol";
+import "../../interfaces/IFeatured.sol";
 import "./Pausable.sol";
 import "./Freezable.sol";
 

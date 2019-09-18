@@ -1,6 +1,5 @@
 pragma solidity ^0.5.0;
 
-
 /**
  * @title ITransferRules interface
  * @dev Represents interface for any on-chain SRC20 transfer restriction 

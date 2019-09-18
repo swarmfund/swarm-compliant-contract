@@ -1,6 +1,6 @@
 pragma solidity ^0.5.0;
 
-import "./IFreezable.sol";
+import "../../interfaces/IFreezable.sol";
 
 /**
  * @title Freezable account

@@ -3,8 +3,13 @@ pragma solidity ^0.5.0;
 import "./ManualApproval.sol";
 import "./Whitelisted.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "../interfaces/ITransferRules.sol";
 
-contract TransferRules is ITransferRules, ManualApproval {
+/*
+ * @title TransferRules contract
+ * @dev Contract that is checking if on-chain rules for token transfers are concluded.
+ */
+contract TransferRules is ITransferRules, ManualApproval, Whitelisted {
     address private _src20;
 
     modifier onlySRC20 {
