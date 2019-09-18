@@ -1,5 +1,6 @@
 pragma solidity ^0.5.0;
 
+import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "./IFeatured.sol";
 import "./Pausable.sol";
 import "./Freezable.sol";
@@ -7,20 +8,15 @@ import "./Freezable.sol";
 /**
  * @dev Support for "SRC20 feature" modifier.
  */
-contract Featured is IFeatured, Pausable, Freezable {
-    uint8 public constant ForceTransfer     = 0x01;
-    uint8 public constant Pausable          = 0x02;
-    uint8 public constant AccountBurning    = 0x04;
-    uint8 public constant AccountFreezing   = 0x08;
-
-    uint8 private _enabledFeatures;
+contract Featured is IFeatured, Pausable, Freezable, Ownable {
+    uint8 public _enabledFeatures;
 
     modifier enabled(uint8 feature) {
-        require(_isEnabled(feature), "Token feature is not enabled");
+        require(isEnabled(feature), "Token feature is not enabled");
         _;
     }
 
-    constructor (uint8 features) internal {
+    constructor (uint8 features) public {
         _enable(features);
     }
 
@@ -37,7 +33,82 @@ contract Featured is IFeatured, Pausable, Freezable {
      * @param feature Feature constant to check if enabled.
      * @return True if feature is enabled.
      */
-    function _isEnabled(uint8 feature) internal view returns (bool) {
+    function isEnabled(uint8 feature) public view returns (bool) {
         return _enabledFeatures & feature > 0;
+    }
+
+    function checkTransfer(address from, address to) external view returns (bool) {
+        return _isAccountFrozen(from) && _isAccountFrozen(to) && paused();
+    }
+
+    /**
+    * @dev Check if specified account is frozen. Token issuer can
+    * freeze any account at any time and stop accounts making
+    * transfers.
+    *
+    * @return True if account is frozen.
+    */
+    function isAccountFrozen(address account) external view returns (bool) {
+        return _isAccountFrozen(account);
+    }
+
+    /**
+     * @dev Freezes account.
+     * Emits AccountFrozen event.
+     */
+    function freezeAccount(address account)
+    external
+    enabled(AccountFreezing)
+    onlyOwner
+    {
+        _freezeAccount(account);
+    }
+
+    /**
+     * @dev Unfreezes account.
+     * Emits AccountUnfrozen event.
+     */
+    function unfreezeAccount(address account)
+    external
+    enabled(AccountFreezing)
+    onlyOwner
+    {
+        _unfreezeAccount(account);
+    }
+
+    /**
+     * @dev Check if token is frozen. Token issuer can freeze token
+     * at any time and stop all accounts from making transfers. When
+     * token is frozen, isFrozen(account) returns true for every
+     * account.
+     *
+     * @return True if token is frozen.
+     */
+    function isTokenPaused() external view returns (bool) {
+        return paused();
+    }
+
+    /**
+     * @dev Pauses token.
+     * Emits TokenPaused event.
+     */
+    function pauseToken()
+    external
+    enabled(Pausable)
+    onlyOwner
+    {
+        _pause();
+    }
+
+    /**
+     * @dev Unpauses token.
+     * Emits TokenUnPaused event.
+     */
+    function unPauseToken()
+    external
+    enabled(Pausable)
+    onlyOwner
+    {
+        _unpause();
     }
 }

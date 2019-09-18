@@ -15,7 +15,5 @@ interface ISRC20Owned {
     function updateKYA(bytes32 kyaHash, string calldata kyaUrl, address restrictions) external returns (bool);
     function transferTokenForced(address from, address to, uint256 value) external returns (bool);
 
-    function freezeAccount(address account) external;
-    function unfreezeAccount(address account) external;
     function burnAccount(address account, uint256 value) external returns (bool);
 }

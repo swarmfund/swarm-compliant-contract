@@ -8,9 +8,7 @@ import "./ISRC20.sol";
 import "./ISRC20Owned.sol";
 import "./ISRC20Managed.sol";
 import "../rules/ITransferRules.sol";
-import "./features/Featured.sol";
-import "./features/Pausable.sol";
-import "./features/Freezable.sol";
+import "./features/IFeatured.sol";
 import "../roles/IRoles.sol";
 
 
@@ -18,7 +16,7 @@ import "../roles/IRoles.sol";
  * @title SRC20 contract
  * @dev Base SRC20 contract.
  */
-contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured, Ownable {
+contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
@@ -36,6 +34,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured, O
     KYA private _kya;
 
     IRoles private _roles;
+    IFeatured private _features;
 
     /**
      * @description Configured contract implementing token restriction(s).
@@ -59,6 +58,11 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured, O
         _;
     }
 
+    modifier enabled(uint8 feature) {
+        require(_features.isEnabled(feature), "Token feature is not enabled");
+        _;
+    }
+
     // Constructors
     constructor(
         address owner,
@@ -69,11 +73,10 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured, O
         string memory kyaUrl,
         address restrictions,
         address roles,
-        uint8 features,
+        address features,
         uint256 totalSupply
     )
     SRC20Detailed(name, symbol, decimals)
-    Featured(features)
     public
     {
         _transferOwnership(owner);
@@ -83,6 +86,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured, O
         _updateKYA(kyaHash, kyaUrl, restrictions);
 
         _roles = IRoles(roles);
+        _features = IFeatured(features);
     }
 
     function executeTransfer(address from, address to, uint256 value) external onlyAuthority returns (bool) {
@@ -215,7 +219,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured, O
     */
     function transferTokenForced(address from, address to, uint256 value)
     external
-    enabled(Featured.ForceTransfer)
+    enabled(_features.ForceTransfer())
     onlyOwner
     returns (bool)
     {
@@ -243,78 +247,6 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured, O
         return _nonce[account];
     }
 
-    // Account and token freezing management
-    /**
-     * @dev Check if specified account is frozen. Token issuer can
-     * freeze any account at any time and stop accounts making
-     * transfers.
-     *
-     * @return True if account is frozen.
-     */
-    function isAccountFrozen(address account) external view returns (bool) {
-        return _isAccountFrozen(account);
-    }
-
-    /**
-     * @dev Freezes account.
-     * Emits AccountFrozen event.
-     */
-    function freezeAccount(address account)
-    external
-    enabled(Featured.AccountFreezing)
-    onlyOwner
-    {
-        _freezeAccount(account);
-    }
-
-    /**
-     * @dev Unfreezes account.
-     * Emits AccountUnfrozen event.
-     */
-    function unfreezeAccount(address account)
-    external
-    enabled(Featured.AccountFreezing)
-    onlyOwner
-    {
-        _unfreezeAccount(account);
-    }
-
-    /**
-     * @dev Check if token is frozen. Token issuer can freeze token
-     * at any time and stop all accounts from making transfers. When
-     * token is frozen, isFrozen(account) returns true for every
-     * account.
-     *
-     * @return True if token is frozen.
-     */
-    function isTokenPaused() public view returns (bool) {
-        return paused();
-    }
-
-    /**
-     * @dev Pauses token.
-     * Emits TokenPaused event.
-     */
-    function pauseToken()
-    external
-    enabled(Featured.Pausable)
-    onlyOwner
-    {
-        _pause();
-    }
-
-    /**
-     * @dev Unpauses token.
-     * Emits TokenUnPaused event.
-     */
-    function unPauseToken()
-    external
-    enabled(Featured.Pausable)
-    onlyOwner
-    {
-        _unpause();
-    }
-
     // Account token burning management
     /**
      * @dev Function that burns an amount of the token of a given
@@ -325,7 +257,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured, O
      */
     function burnAccount(address account, uint256 value)
     external
-    enabled(Featured.AccountBurning)
+    enabled(_features.AccountBurning())
     onlyOwner
     returns (bool)
     {
@@ -502,9 +434,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured, O
      * @param value The amount to be transferred.
      */
     function _transfer(address from, address to, uint256 value) internal {
-        require(!isTokenPaused(), "Token is frozen!");
-        require(!_isAccountFrozen(from), "From account is frozen!");
-        require(!_isAccountFrozen(to), "To account is frozen!");
+        require(!_features.checkTransfer(from, to));
 
         require(to != address(0));
 

@@ -4,11 +4,6 @@ pragma solidity ^0.5.0;
  * @title SRC20 public interface
  */
 interface ISRC20 {
-    // SRC20 interface
-    function name() external view returns (string memory);
-    function symbol() external view returns (string memory);
-    function decimals() external view returns (uint8);
-
     function getKYA() external view returns (bytes32, string memory, address);
 
     function transferToken(address to, uint256 value, uint256 nonce, uint256 expirationTime,
@@ -17,8 +12,6 @@ interface ISRC20 {
         uint256 expirationTime, bytes32 hash, bytes calldata signature) external returns (bool);
 
     function getTransferNonce() external view returns (uint256);
-    function isTokenPaused() external view returns (bool);
-    function isAccountFrozen(address account) external view returns (bool);
 
     function getTransferNonce(address account) external view returns (uint256);
 

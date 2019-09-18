@@ -8,6 +8,7 @@ const FailedRestriction = artifacts.require('FailedRestrictionMock');
 const SuccessfulRestriction = artifacts.require('SuccessfulRestrictionMock');
 const TokenDataRestrictionMock = artifacts.require('TokenDataRestrictionMock');
 const SRC20Roles = artifacts.require('SRC20Roles');
+const FeaturedMock = artifacts.require('FeaturedMock');
 
 
 contract('SRC20', async function ([_, manager, owner, authority0, authority1, account0, account1, delegate0]) {
@@ -24,6 +25,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
     this.failedRestriction = await FailedRestriction.new();
     this.successfulRestriction = await SuccessfulRestriction.new();
     this.tokenDataRestrictionMock = await TokenDataRestrictionMock.new();
+    this.featured = await FeaturedMock.new(features, {from: owner});
 
     this.roles = await SRC20Roles.new({from: owner});
     await this.roles.transferManagement(manager, {from: owner});
@@ -37,7 +39,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
       kyaUrl,
       constants.ZERO_ADDRESS,
       this.roles.address,
-      features,
+      this.featured.address,
       totalSupply,
       {from: manager}
     );
@@ -268,9 +270,9 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
 
   describe('Configurable token features', function () {
     it('should allow forceTransfer with feature enabled', async function () {
-      const forceTransfer = await this.token.ForceTransfer();
+      const forceTransfer = await this.featured.ForceTransfer();
 
-      await this.token.featureEnable(forceTransfer);
+      await this.featured.featureEnable(forceTransfer);
       ({logs: this.logs} = await this.token.transferTokenForced(owner, account0, value, {from: owner}));
       expectEvent.inLogs(this.logs, 'Transfer', {
         from: owner,
@@ -285,54 +287,53 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
     });
 
     it('should allow token pausing if feature enabled', async function () {
-      const tokenPausable = await this.token.Pausable();
-      await this.token.featureEnable(tokenPausable);
+      const tokenPausable = await this.featured.Pausable();
+      await this.featured.featureEnable(tokenPausable);
 
-      ({logs: this.logs} = await this.token.pauseToken({from: owner}));
+      ({logs: this.logs} = await this.featured.pauseToken({from: owner}));
       expectEvent.inLogs(this.logs, 'Paused');
 
-      const isPaused = await this.token.paused({from: owner});
+      const isPaused = await this.featured.paused({from: owner});
       assert.equal(isPaused, true);
 
     });
 
     it('should allow account freezing if feature enabled', async function () {
-      const accountFreezing = await this.token.AccountFreezing();
-      await this.token.featureEnable(accountFreezing);
+      const accountFreezing = await this.featured.AccountFreezing();
+      await this.featured.featureEnable(accountFreezing);
 
-      ({logs: this.logs} = await this.token.freezeAccount(account0, {from: owner}));
+      ({logs: this.logs} = await this.featured.freezeAccount(account0, {from: owner}));
       expectEvent.inLogs(this.logs, 'AccountFrozen', {
         account: account0
       });
 
-      const isAccountFrozen = await this.token.isAccountFrozen(account0, {from: owner});
+      const isAccountFrozen = await this.featured.isAccountFrozen(account0, {from: owner});
       assert.equal(isAccountFrozen, true);
-
     });
 
     it('should not allow token pausing if caller is not owner', async function () {
-      const pausable = await this.token.Pausable();
-      await this.token.featureEnable(pausable);
+      const pausable = await this.featured.Pausable();
+      await this.featured.featureEnable(pausable);
 
-      await shouldFail.reverting.withMessage(this.token.pauseToken({from: account1}),
+      await shouldFail.reverting.withMessage(this.featured.pauseToken({from: account1}),
           "Ownable: caller is not the owner");
     });
 
     it('should not allow token pausing if feature disabled', async function () {
-      await shouldFail.reverting.withMessage(this.token.pauseToken({from: owner}),
+      await shouldFail.reverting.withMessage(this.featured.pauseToken({from: owner}),
         "Token feature is not enabled");
     });
 
     it('should not allow account freezing if feature disabled', async function () {
-      await shouldFail.reverting.withMessage(this.token.freezeAccount(account0, {from: owner}),
+      await shouldFail.reverting.withMessage(this.featured.freezeAccount(account0, {from: owner}),
           "Token feature is not enabled");
     });
 
 
 
     it('should allow owner to burn tokens of any specific account, if feature enabled', async function () {
-      const accountBurning = await this.token.AccountBurning();
-      await this.token.featureEnable(accountBurning);
+      const accountBurning = await this.featured.AccountBurning();
+      await this.featured.featureEnable(accountBurning);
 
       ({logs: this.logs} = await this.token.burnAccount(owner, totalSupply, {from: owner}));
       expectEvent.inLogs(this.logs, 'Transfer', {

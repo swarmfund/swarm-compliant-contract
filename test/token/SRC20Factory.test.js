@@ -5,9 +5,9 @@ const helpers = require('./helpers');
 const SRC20Registry = artifacts.require('SRC20RegistryMock');
 const SRC20Factory = artifacts.require('SRC20Factory');
 const SRC20 = artifacts.require('SRC20');
-const Featured = artifacts.require('Featured');
 const SwarmTokenMock = artifacts.require('SwarmTokenMock');
 const SRC20Roles = artifacts.require('SRC20Roles');
+const Featured = artifacts.require('FeaturedMock');
 
 contract('SRC20Factory', function ([_, owner, account0, account1, account2]) {
   const kyaHash = crypto.createHash('sha256').update(constants.ZERO_ADDRESS).digest();
@@ -23,6 +23,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2]) {
     this.registry = await SRC20Registry.new(this.swarmTokenMock.address, {from: owner});
     this.factory = await SRC20Factory.new(this.registry.address, {from: owner});
     this.roles = await SRC20Roles.new({from: owner});
+    this.feature = await Featured.new(features, {from: owner});
 
     await this.registry.addFactory(this.factory.address, {from: owner});
 
@@ -35,7 +36,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2]) {
       kyaUrl,
       constants.ZERO_ADDRESS,
       this.roles.address,
-      features,
+      this.feature.address,
       srcTotalSupply,
       {from: owner}
     );
@@ -51,7 +52,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2]) {
       kyaUrl,
       constants.ZERO_ADDRESS,
       this.roles.address,
-      features,
+      this.feature.address,
       srcTotalSupply,
       {from: owner}
     );
