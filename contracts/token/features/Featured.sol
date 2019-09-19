@@ -16,8 +16,9 @@ contract Featured is IFeatured, Pausable, Freezable, Ownable {
         _;
     }
 
-    constructor (uint8 features) public {
+    constructor (address owner, uint8 features) public {
         _enable(features);
+        _transferOwnership(owner);
     }
 
     /**

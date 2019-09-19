@@ -11,7 +11,8 @@ import "../interfaces/IRoles.sol";
  * @dev Roles wrapper contract around all roles needed for SRC20 contract.
  */
 contract SRC20Roles is IRoles, DelegateRole, AuthorityRole, Managed, Ownable {
-    constructor() public {
+    constructor(address owner) public {
+        _transferOwnership(owner);
     }
 
     function addAuthority(address account) external onlyOwner {

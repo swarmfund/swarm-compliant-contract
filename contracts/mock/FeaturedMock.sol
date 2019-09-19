@@ -7,10 +7,9 @@ import "../token/features/Featured.sol";
  * @dev SRC20 mock contract for tests.
  */
 contract FeaturedMock is Featured {
-    constructor (uint8 features) public
-    Featured(features)
+    constructor (address owner, uint8 features) public
+    Featured(owner, features)
     {
-        _enable(features);
     }
 
     /**

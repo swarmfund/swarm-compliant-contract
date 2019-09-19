@@ -17,6 +17,10 @@ contract TransferRules is ITransferRules, ManualApproval, Whitelisted {
         _;
     }
 
+    constructor(address owner) public {
+        _transferOwnership(owner);
+    }
+
     function setSRC(address src20) external returns (bool) {
         require(_src20 == address(0), "SRC20 already set");
         _src20 = src20;

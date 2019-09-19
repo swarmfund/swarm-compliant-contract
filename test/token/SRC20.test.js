@@ -22,12 +22,12 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
   const features = 0x00;
 
   beforeEach(async function () {
-    this.failedRestriction = await FailedRestriction.new();
-    this.successfulRestriction = await SuccessfulRestriction.new();
-    this.tokenDataRestrictionMock = await TokenDataRestrictionMock.new();
-    this.featured = await FeaturedMock.new(features, {from: owner});
+    this.failedRestriction = await FailedRestriction.new(owner);
+    this.successfulRestriction = await SuccessfulRestriction.new(owner);
+    this.tokenDataRestrictionMock = await TokenDataRestrictionMock.new(owner);
+    this.featured = await FeaturedMock.new(owner, features, {from: owner});
 
-    this.roles = await SRC20Roles.new({from: owner});
+    this.roles = await SRC20Roles.new(owner, {from: owner});
     await this.roles.transferManagement(manager, {from: owner});
 
     this.token = await SRC20.new(
