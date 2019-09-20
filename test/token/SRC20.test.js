@@ -434,4 +434,16 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
       });
     });
   });
+
+  describe('handling transfer rules', function () {
+    it('should be able to transfer from/to whitelisted address');
+
+    it('should not be able to transfer from/to not whitelisted address');
+
+    it('should be able to request transfer of funds when from/to are graylisted');
+
+    it('should be able to execute transfer request when from/to are graylisted');
+
+    it('should not be able to request transfer of funds is not')
+  });
 });

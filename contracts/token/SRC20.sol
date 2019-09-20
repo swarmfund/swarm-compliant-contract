@@ -348,7 +348,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
         return true;
     }
 
-    function transferFrom(address from, address to, uint256 value) external returns (bool) {
+    function transferFrom(address from, address to, uint256 value) public returns (bool) {
         if (_restrictions != ITransferRules(0)) {
             require(_restrictions.authorize(from, to, value), "Transfer not authorized");
 
@@ -520,7 +520,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
         for (uint256 i = 0; i < count; i++) {
             address to = _addresses[i];
             uint256 value = _values[i];
-            transferFrom (msg.sender, to, value);
+            require(transferFrom (msg.sender, to, value), "TransferFrom failed");
         }
 
         return true;
@@ -546,7 +546,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
             uint256 transfer = _transfers [i];
             uint256 value = (transfer >> 160) * _lotSize;
             address to = address (transfer & 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
-            transferFrom (msg.sender, to, value);
+            require(transferFrom (msg.sender, to, value), "TransferFrom failed");
         }
 
         return true;
