@@ -501,4 +501,56 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
 
         emit Approval(owner, spender, value);
     }
+
+    /**
+     * Perform multiple token transfers from the token owner's address.
+     * The tokens should already be minted. If this function is to be called by
+     * an actor other than the owner (a delegate), the owner has to call approve()
+     * first to set up the delegate's allowance.
+     *
+     * @param _addresses an array of addresses to transfer to
+     * @param _values an array of values
+     * @return True on success
+     */ 
+   function bulkTransfer (
+        address[] calldata _addresses, uint256[] calldata _values) external returns (bool) {
+        require(_addresses.length == _values.length, "Input dataset length mismatch");
+
+        uint256 count = _addresses.length;
+        for (uint256 i = 0; i < count; i++) {
+            address to = _addresses[i];
+            uint256 value = _values[i];
+            transferFrom (msg.sender, to, value);
+        }
+
+        return true;
+    }
+
+    /**
+     * Perform multiple token transfers from the token owner's address.
+     * The tokens should already be minted. If this function is to be called by
+     * an actor other than the owner (a delegate), the owner has to call approve()
+     * first to set up the delegate's allowance.
+     *
+     * Data needs to be packed correctly before calling this function.
+     *
+     * @param _lotSize number of tokens in the lot
+     * @param _transfers an array or encoded transfers to perform
+     * @return True on success
+     */
+    function encodedBulkTransfer (
+        uint160 _lotSize, uint256[] calldata _transfers) external returns (bool) {
+
+        uint256 count = _transfers.length;
+        for (uint256 i = 0; i < count; i++) {
+            uint256 transfer = _transfers [i];
+            uint256 value = (transfer >> 160) * _lotSize;
+            address to = address (transfer & 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+            transferFrom (msg.sender, to, value);
+        }
+
+        return true;
+    }
+
+
 }
