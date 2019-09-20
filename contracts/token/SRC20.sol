@@ -513,14 +513,15 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
      * @return True on success
      */ 
    function bulkTransfer (
-        address[] calldata _addresses, uint256[] calldata _values) external returns (bool) {
+        address[] calldata _addresses, uint256[] calldata _values) external onlyDelegate returns (bool) {
         require(_addresses.length == _values.length, "Input dataset length mismatch");
 
         uint256 count = _addresses.length;
         for (uint256 i = 0; i < count; i++) {
             address to = _addresses[i];
             uint256 value = _values[i];
-            require(transferFrom (msg.sender, to, value), "TransferFrom failed");
+            _approve(owner(), msg.sender, _allowances[owner()][msg.sender].sub(value));
+            _transfer(owner(), to, value);
         }
 
         return true;
@@ -539,14 +540,15 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
      * @return True on success
      */
     function encodedBulkTransfer (
-        uint160 _lotSize, uint256[] calldata _transfers) external returns (bool) {
+        uint160 _lotSize, uint256[] calldata _transfers) external onlyDelegate returns (bool) {
 
         uint256 count = _transfers.length;
         for (uint256 i = 0; i < count; i++) {
             uint256 transfer = _transfers [i];
             uint256 value = (transfer >> 160) * _lotSize;
             address to = address (transfer & 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
-            require(transferFrom (msg.sender, to, value), "TransferFrom failed");
+            _approve(owner(), msg.sender, _allowances[owner()][msg.sender].sub(value));
+            _transfer(owner(), to, value);
         }
 
         return true;
