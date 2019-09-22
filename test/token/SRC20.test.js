@@ -2,6 +2,7 @@ const {BN, constants, expectEvent, shouldFail} = require('openzeppelin-test-help
 const crypto = require('crypto');
 const moment = require('moment');
 const helpers = require('./helpers');
+const {encodeTransfer} = require('./utils');
 
 const SRC20 = artifacts.require('SRC20Mock');
 const FailedRestriction = artifacts.require('FailedRestrictionMock');
@@ -446,4 +447,38 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
 
     it('should not be able to request transfer of funds is not')
   });
+
+  describe('distribution functionality', function () {
+    it('should be able to distribute tokens correctly', async function () {
+      await this.roles.addDelegate(delegate0, {from: owner});
+      await this.token.approve(delegate0, value, {from: owner});
+
+      const addresses = [account0];
+      const values = [value.toString()];
+
+      ({logs: this.logs} = await this.token.bulkTransfer(addresses, values, {from: delegate0}));
+      const balance = await this.token.balanceOf(account0);
+
+      assert.equal(value, balance);
+    });
+
+    it('should be able to distribute tokens correctly with encoded params', async function () {
+      await this.roles.addDelegate(delegate0, {from: owner});
+      await this.token.approve(delegate0, value, {from: owner});
+
+      const batches = [{
+        address: account0,
+        amount: value.toString()
+      }];
+
+      const transfers = batches.map(encodeTransfer);
+
+      ({logs: this.logs} = await this.token.encodedBulkTransfer(1, transfers, {from: delegate0}));
+      const balance = await this.token.balanceOf(account0);
+
+      assert.equal(value, balance);
+    });
+  });
+
+
 });
