@@ -67,9 +67,10 @@ contract SRC20Registry is ISRC20Registry, Manager {
 
     /**
      * @dev Adds token to registry. Allowed only to factories.
-     * Emits TokenRegistered event.
+     * Emits SRC20Registered event.
      *
      * @param token The token address.
+     * @param roles roles SRC20Roles contract address.
      * @param tokenOwner Owner of the token.
      * @return True on success.
      */

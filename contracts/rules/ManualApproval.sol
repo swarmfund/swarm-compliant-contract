@@ -47,7 +47,7 @@ contract ManualApproval is Ownable {
     constructor () public {
     }
 
-    function _setSRO20ManualAllover(address src20) internal returns (bool) {
+    function _setSRC20ManualAllover(address src20) internal returns (bool) {
         _src20 = ISRC20(src20);
         return true;
     }

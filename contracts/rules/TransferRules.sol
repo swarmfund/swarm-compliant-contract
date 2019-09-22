@@ -24,7 +24,7 @@ contract TransferRules is ITransferRules, ManualApproval, Whitelisted {
     function setSRC(address src20) external returns (bool) {
         require(_src20 == address(0), "SRC20 already set");
         _src20 = src20;
-        _setSRO20ManualAllover(_src20);
+        _setSRC20ManualAllover(_src20);
         return true;
     }
 

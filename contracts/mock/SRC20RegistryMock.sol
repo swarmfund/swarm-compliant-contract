@@ -4,7 +4,7 @@ import "../factories/SRC20Registry.sol";
 
 /**
  * @title SRC20RegistryMock contract
- * @dev SRC20RegistryMock mock contract used only for tests.
+ * @dev SRC20Registry mock contract used only for tests.
  */
 contract SRC20RegistryMock is SRC20Registry {
     constructor(address swmERC20)

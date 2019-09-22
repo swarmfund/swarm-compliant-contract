@@ -102,7 +102,7 @@ contract Featured is IFeatured, Pausable, Freezable, Ownable {
     }
 
     /**
-     * @dev Unpauses token.
+     * @dev Unpause token.
      * Emits TokenUnPaused event.
      */
     function unPauseToken()

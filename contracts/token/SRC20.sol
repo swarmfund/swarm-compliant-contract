@@ -44,7 +44,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
      */
     ITransferRules private _restrictions;
 
-     modifier onlyAuthority() {
+    modifier onlyAuthority() {
         require(_roles.isAuthority(msg.sender), "Caller not authority");
         _;
     }
@@ -436,7 +436,6 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
      */
     function _transfer(address from, address to, uint256 value) internal {
         require(!_features.checkTransfer(from, to));
-
         require(to != address(0));
 
         _balances[from] = _balances[from].sub(value);
@@ -512,7 +511,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
      * @param _values an array of values
      * @return True on success
      */ 
-   function bulkTransfer (
+    function bulkTransfer (
         address[] calldata _addresses, uint256[] calldata _values) external onlyDelegate returns (bool) {
         require(_addresses.length == _values.length, "Input dataset length mismatch");
 
@@ -544,7 +543,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
 
         uint256 count = _transfers.length;
         for (uint256 i = 0; i < count; i++) {
-            uint256 transfer = _transfers [i];
+            uint256 transfer = _transfers[i];
             uint256 value = (transfer >> 160) * _lotSize;
             address to = address (transfer & 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
             _approve(owner(), msg.sender, _allowances[owner()][msg.sender].sub(value));
@@ -553,6 +552,4 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
 
         return true;
     }
-
-
 }

@@ -27,8 +27,7 @@ contract Pausable is IPausable {
     }
 
     /**
-     * @dev Initializes the contract in unpaused state. Assigns the Pauser role
-     * to the deployer.
+     * @dev Initializes the contract in unpaused state.
      */
     constructor () internal {
         _paused = false;
@@ -42,7 +41,7 @@ contract Pausable is IPausable {
     }
 
     /**
-     * @dev Called by a pauser to pause, triggers stopped state.
+     * @dev Sets stopped state.
      */
     function _pause() internal whenNotPaused {
         _paused = true;
@@ -50,7 +49,7 @@ contract Pausable is IPausable {
     }
 
     /**
-     * @dev Called by a pauser to unpause, returns to normal state.
+     * @dev Returns to normal state.
      */
     function _unpause() internal whenPaused {
         _paused = false;

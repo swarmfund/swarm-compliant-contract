@@ -41,8 +41,9 @@ contract Managed {
      * thereby removing any functionality that is only available to the manager.
      */
     function _renounceManagement() internal returns (bool) {
-        _manager = address(0);
         emit ManagementTransferred(_manager, address(0));
+        _manager = address(0);
+
         return true;
     }
 
@@ -55,6 +56,7 @@ contract Managed {
 
         emit ManagementTransferred(_manager, newManager);
         _manager = newManager;
+
         return true;
     }
 }
