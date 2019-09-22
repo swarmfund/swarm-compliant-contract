@@ -5,7 +5,7 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/ISRC20.sol";
 import "../interfaces/ISRC20Managed.sol";
-import "../interfaces/IRoles.sol";
+import "../interfaces/ISRC20Roles.sol";
 
 
 /**
@@ -157,7 +157,7 @@ contract Manager is Ownable {
     {
         require(_registry[src20].owner != address(0), "SRC20 token contract not registered");
 
-        require(IRoles(_registry[src20].roles).renounceManagement());
+        require(ISRC20Roles(_registry[src20].roles).renounceManagement());
 
         return true;
     }
@@ -177,7 +177,7 @@ contract Manager is Ownable {
         require(_registry[src20].owner != address(0), "SRC20 token contract not registered");
         require(newManager != address(0), "newManager address is zero");
 
-        require(IRoles(_registry[src20].roles).transferManagement(newManager));
+        require(ISRC20Roles(_registry[src20].roles).transferManagement(newManager));
 
         return true;
     }

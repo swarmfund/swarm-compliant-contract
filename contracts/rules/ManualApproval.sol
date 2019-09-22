@@ -4,7 +4,6 @@ import "../interfaces/ITransferRules.sol";
 import "../interfaces/ISRC20.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
-// owner should be authority role in SRC20
 /*
  * @title ManualApproval contract
  * @dev On-chain transfer rule that is handling transfer request/execution for
@@ -53,34 +52,25 @@ contract ManualApproval is Ownable {
     }
 
     /**
-    * @dev ...
-    *
-    */
-    function _transferRequest(address from, address to, uint256 value) internal returns (bool) {
-        if (!(_grayList[from] || _grayList[to])) {
-            return false;
-        }
-
-        _src20.executeTransfer(from, address(this), value);
-
-        _transferReq[_reqNumber] = TransferReq(from, to, value);
-
-        emit TransferRequest(_reqNumber, from, to, value);
-        _reqNumber = _reqNumber + 1;
-
-        return true;
-    }
-
+     * @dev Owner of this contract have authority to approve tx which are valid.
+     *
+     * @param reqNumber - transfer request number.
+     */
     function transferApproval(uint256 reqNumber) external onlyOwner returns (bool) {
         TransferReq memory req = _transferReq[reqNumber];
 
-        _src20.executeTransfer(address(this), req.to, req.value);
+        require(_src20.executeTransfer(address(this), req.to, req.value), "SRC20 transfer failed");
 
         delete _transferReq[reqNumber];
         emit TransferApproval(reqNumber, req.from, req.to, req.value);
         return true;
     }
 
+    /**
+     * @dev Canceling transfer request and returning funds to from.
+     *
+     * @param reqNumber - transfer request number.
+     */
     function cancelTransferRequest(uint256 reqNumber) external returns (bool) {
         TransferReq memory req = _transferReq[reqNumber];
         require(req.from == msg.sender, "Not owner of the transfer request");
@@ -98,13 +88,24 @@ contract ManualApproval is Ownable {
         return _grayList[account];
     }
 
-    function grayListedAccount(address account) external onlyOwner returns (bool){
+    function grayListAccount(address account) external onlyOwner returns (bool){
         _grayList[account] = true;
         return true;
     }
 
-    function unGrayListedAccount(address account) external onlyOwner returns (bool){
+    function unGrayListAccount(address account) external onlyOwner returns (bool){
         delete _grayList[account];
+        return true;
+    }
+
+    function _transferRequest(address from, address to, uint256 value) internal returns (bool) {
+        require(_src20.executeTransfer(from, address(this), value), "SRC20 transfer failed");
+
+        _transferReq[_reqNumber] = TransferReq(from, to, value);
+
+        emit TransferRequest(_reqNumber, from, to, value);
+        _reqNumber = _reqNumber + 1;
+
         return true;
     }
 }

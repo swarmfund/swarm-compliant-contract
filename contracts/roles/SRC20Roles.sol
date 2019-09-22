@@ -4,35 +4,41 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "./DelegateRole.sol";
 import "./AuthorityRole.sol";
 import "./Managed.sol";
-import "../interfaces/IRoles.sol";
+import "../interfaces/ISRC20Roles.sol";
 
 /*
  * @title SRC20Roles contract
  * @dev Roles wrapper contract around all roles needed for SRC20 contract.
  */
-contract SRC20Roles is IRoles, DelegateRole, AuthorityRole, Managed, Ownable {
-    constructor(address owner) public {
+contract SRC20Roles is ISRC20Roles, DelegateRole, AuthorityRole, Managed, Ownable {
+    constructor(address owner, address manager) public
+        Managed(manager)
+    {
         _transferOwnership(owner);
     }
 
-    function addAuthority(address account) external onlyOwner {
+    function addAuthority(address account) external onlyOwner returns (bool) {
         _addAuthority(account);
+        return true;
     }
 
-    function removeAuthority(address account) external onlyOwner {
+    function removeAuthority(address account) external onlyOwner returns (bool) {
         _removeAuthority(account);
+        return true;
     }
 
     function isAuthority(address account) external view returns (bool) {
         return _hasAuthority(account);
     }
 
-    function addDelegate(address account) external {
+    function addDelegate(address account) external onlyOwner returns (bool) {
         _addDelegate(account);
+        return true;
     }
 
-    function removeDelegate(address account) external {
+    function removeDelegate(address account) external onlyOwner returns (bool) {
         _removeDelegate(account);
+        return true;
     }
 
     function isDelegate(address account) external view returns (bool) {

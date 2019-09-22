@@ -38,6 +38,12 @@ contract Featured is IFeatured, Pausable, Freezable, Ownable {
         return _enabledFeatures & feature > 0;
     }
 
+    /**
+     * @dev Call to check if transfer will pass from feature contract stand point.
+     *
+     * @param from The address to transfer from.
+     * @param to The address to send tokens to.
+     */
     function checkTransfer(address from, address to) external view returns (bool) {
         return _isAccountFrozen(from) && _isAccountFrozen(to) && paused();
     }

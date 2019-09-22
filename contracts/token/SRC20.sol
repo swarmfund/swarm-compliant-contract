@@ -9,7 +9,7 @@ import "../interfaces/ISRC20Owned.sol";
 import "../interfaces/ISRC20Managed.sol";
 import "../interfaces/ITransferRules.sol";
 import "../interfaces/IFeatured.sol";
-import "../interfaces/IRoles.sol";
+import "../interfaces/ISRC20Roles.sol";
 import "../interfaces/ISRC20.sol";
 
 
@@ -34,7 +34,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
 
     KYA private _kya;
 
-    IRoles private _roles;
+    ISRC20Roles private _roles;
     IFeatured private _features;
 
     /**
@@ -86,10 +86,18 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
         _balances[owner] = _totalSupply;
         _updateKYA(kyaHash, kyaUrl, restrictions);
 
-        _roles = IRoles(roles);
+        _roles = ISRC20Roles(roles);
         _features = IFeatured(features);
     }
 
+    /**
+     * @dev This method is intended to be executed by TransferRules contract when doTransfer is called in transfer
+     * and transferFrom methods to check where funds should go.
+     *
+     * @param from The address to transfer from.
+     * @param to The address to send tokens to.
+     * @param value The amount of tokens to send.
+     */
     function executeTransfer(address from, address to, uint256 value) external onlyAuthority returns (bool) {
         _transfer(from, to, value);
         return true;
@@ -139,7 +147,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
         _restrictions = ITransferRules(restrictions);
 
         if (restrictions != address(0)) {
-            _restrictions.setSRC(address(this));
+            require(_restrictions.setSRC(address(this)), "SRC20 contract already set in transfer rules");
         }
 
         emit KYAUpdated(kyaHash, kyaUrl, restrictions);
@@ -340,7 +348,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
         if (_restrictions != ITransferRules(0)) {
             require(_restrictions.authorize(msg.sender, to, value), "Transfer not authorized");
 
-            _restrictions.doTransfer(msg.sender, to, value);
+            require(_restrictions.doTransfer(msg.sender, to, value), "Transfer failed");
         } else {
             _transfer(msg.sender, to, value);
         }
@@ -353,7 +361,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
             require(_restrictions.authorize(from, to, value), "Transfer not authorized");
 
             _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
-            _restrictions.doTransfer(msg.sender, to, value);
+            require(_restrictions.doTransfer(msg.sender, to, value), "Transfer failed");
         } else {
             _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
             _transfer(msg.sender, to, value);
@@ -519,6 +527,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
         for (uint256 i = 0; i < count; i++) {
             address to = _addresses[i];
             uint256 value = _values[i];
+            require(!_features.checkTransfer(owner(), to));
             _approve(owner(), msg.sender, _allowances[owner()][msg.sender].sub(value));
             _transfer(owner(), to, value);
         }
@@ -546,6 +555,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
             uint256 transfer = _transfers[i];
             uint256 value = (transfer >> 160) * _lotSize;
             address to = address (transfer & 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+            require(!_features.checkTransfer(owner(), to));
             _approve(owner(), msg.sender, _allowances[owner()][msg.sender].sub(value));
             _transfer(owner(), to, value);
         }

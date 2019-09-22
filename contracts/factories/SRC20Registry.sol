@@ -14,11 +14,6 @@ import "../interfaces/ISRC20Registry.sol";
 contract SRC20Registry is ISRC20Registry, Manager {
     using Roles for Roles.Role;
 
-    event FactoryAdded(address account);
-    event FactoryRemoved(address account);
-    event SRC20Registered(address token, address tokenOwner);
-    event SRC20Removed(address token);
-    
     Roles.Role private _factories;
 
 
@@ -76,6 +71,7 @@ contract SRC20Registry is ISRC20Registry, Manager {
      */
     function put(address token, address roles, address tokenOwner) external returns (bool) {
         require(token != address(0), "token is zero address");
+        require(roles != address(0), "roles is zero address");
         require(tokenOwner != address(0), "tokenOwner is zero address");
         require(_factories.has(msg.sender), "factory not registered");
 
@@ -98,10 +94,7 @@ contract SRC20Registry is ISRC20Registry, Manager {
         require(token != address(0), "token is zero address");
         require(_registry[token].owner != address(0), "token not registered");
 
-        delete _registry[token].owner;
-        delete _registry[token].stake;
-        delete _registry[token]._swm;
-        delete _registry[token]._src;
+        delete _registry[token];
 
         emit SRC20Removed(token);
 

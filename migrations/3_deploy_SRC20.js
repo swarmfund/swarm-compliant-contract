@@ -1,4 +1,5 @@
 const Featured = artifacts.require('Featured');
+const SRC20Registry = artifacts.require('SRC20Registry');
 const SRC20Roles = artifacts.require('SRC20Roles');
 const TransferRules = artifacts.require('TransferRules');
 const SRC20Factory = artifacts.require("SRC20Factory");
@@ -16,10 +17,13 @@ const {
     TOTAL_SUPPLY,
 } = process.env;
 
-module.exports = function (deployer, network) {
+module.exports = async function (deployer, network) {
     if (network.includes('mainnet')) {
+        const registry = await SRC20Registry.deployed();
+
         return deployer.deploy(SRC20Roles,
             TOKEN_OWNER,
+            registry.address,
         ).then(async function (roles) {
             return deployer.deploy(Featured,
                 TOKEN_OWNER,
@@ -48,8 +52,11 @@ module.exports = function (deployer, network) {
             });
         });
     } else {
+        const registry = await SRC20Registry.deployed();
+
         return deployer.deploy(SRC20Roles,
             DEVELOPMENT_SWM_TOKEN_OWNER,
+            registry.address,
         ).then(async function (roles) {
             return deployer.deploy(Featured,
                 DEVELOPMENT_SWM_TOKEN_OWNER,

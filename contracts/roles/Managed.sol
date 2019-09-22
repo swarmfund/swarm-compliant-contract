@@ -13,8 +13,8 @@ contract Managed {
      * @dev The Managed constructor sets the original `manager` of the contract to the sender
      * account.
      */
-    constructor () internal {
-        _manager = msg.sender;
+    constructor (address manager) internal {
+        _manager = manager;
         emit ManagementTransferred(address(0), _manager);
     }
 

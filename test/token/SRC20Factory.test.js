@@ -22,7 +22,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2]) {
     this.swarmTokenMock = await SwarmTokenMock.new(account0, swmTotalSupply, {from: owner});
     this.registry = await SRC20Registry.new(this.swarmTokenMock.address, {from: owner});
     this.factory = await SRC20Factory.new(this.registry.address, {from: owner});
-    this.roles = await SRC20Roles.new(owner, {from: owner});
+    this.roles = await SRC20Roles.new(owner, this.registry.address, {from: owner});
     this.feature = await Featured.new(owner, features, {from: owner});
 
     await this.registry.addFactory(this.factory.address, {from: owner});
@@ -40,8 +40,6 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2]) {
       srcTotalSupply,
       {from: owner}
     );
-
-    this.roles.transferManagement(this.registry.address, {from: owner}); // @TODO move this to contract
 
     this.unregisteredToken = await SRC20.new(
       account0,

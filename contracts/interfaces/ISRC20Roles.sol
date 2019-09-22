@@ -12,14 +12,14 @@ pragma solidity ^0.5.0;
  * `Manager` the person who is responsible for minting and burning the tokens. It should be
  * be registry contract where staking->minting is executed.
  */
-contract IRoles {
+contract ISRC20Roles {
     function isAuthority(address account) external view returns (bool);
-    function removeAuthority(address account) external;
-    function addAuthority(address account) external;
+    function removeAuthority(address account) external returns (bool);
+    function addAuthority(address account) external returns (bool);
 
     function isDelegate(address account) external view returns (bool);
-    function addDelegate(address account) external;
-    function removeDelegate(address account) external;
+    function addDelegate(address account) external returns (bool);
+    function removeDelegate(address account) external returns (bool);
 
     function manager() external view returns (address);
     function isManager(address account) public view returns (bool);
