@@ -43,7 +43,7 @@ contract TransferRules is ITransferRules, ManualApproval, Whitelisted {
     */
     function authorize(address from, address to, uint256 value) public returns (bool) {
         return (isWhitelisted(from) || isGrayListed(from)) &&
-        (isWhitelisted(to) || isGrayListed(to));
+            (isWhitelisted(to) || isGrayListed(to));
     }
 
     /**
@@ -60,13 +60,13 @@ contract TransferRules is ITransferRules, ManualApproval, Whitelisted {
             if (isGrayListed(from) || isGrayListed(to)) {
                 _transferRequest(from, to, value);
             } else {
-                require(ISRC20(_src20).executeTransfer(from, to, value), "SRC20 tranfer failed");
+                require(ISRC20(_src20).executeTransfer(from, to, value), "SRC20 transfer failed");
             }
         } else if (isGrayListed(from) && isWhitelisted(to) ||
-        isWhitelisted(from) && isGrayListed(to) ||
+            isWhitelisted(from) && isGrayListed(to) ||
             isGrayListed(from) && isGrayListed(to)
         ) {
-            require(ISRC20(_src20).executeTransfer(from, to, value), "SRC20 tranfer failed");
+            require(ISRC20(_src20).executeTransfer(from, to, value), "SRC20 transfer failed");
         }
 
         return true;
