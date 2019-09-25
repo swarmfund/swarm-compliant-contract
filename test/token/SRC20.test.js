@@ -448,7 +448,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
   });
 
   describe('distribution functionality', function () {
-    it('should be able to distribute tokens correctly', async function () {
+    it('a delegate should be able to distribute tokens using bulkTransfer()', async function () {
       await this.roles.addDelegate(delegate0, {from: owner});
       await this.token.approve(delegate0, value, {from: owner});
 
@@ -461,7 +461,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
       assert.equal(value, balance);
     });
 
-    it('should be able to distribute tokens correctly with encoded params', async function () {
+    it('a delegate should be able to distribute tokens using encodedBulkTransfer()', async function () {
       await this.roles.addDelegate(delegate0, {from: owner});
       await this.token.approve(delegate0, value, {from: owner});
 
@@ -477,6 +477,38 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
 
       assert.equal(value, balance);
     });
+
+    it('should not allow anyone but a delegate to distribute tokens using bulkTransfer()', async function () {
+ 
+      await this.roles.addDelegate(delegate0, {from: owner});
+      await this.token.approve(delegate0, value, {from: owner});
+      await this.roles.removeDelegate(delegate0, {from: owner});
+    
+      const addresses = [account0];
+      const values = [value.toString()];
+
+      await shouldFail.reverting.withMessage(this.token.bulkTransfer(addresses, values, {from: delegate0}),
+      "Caller not delegate" );
+    }); 
+
+    it('should not allow anyone but a delegate to distribute tokens using encodedBulkTransfer()', async function () {
+      await this.roles.addDelegate(delegate0, {from: owner});
+      await this.token.approve(delegate0, value, {from: owner});
+      await this.roles.removeDelegate(delegate0, {from: owner});
+
+      const batches = [{
+        address: account0,
+        amount: value.toString()
+      }];
+
+      const transfers = batches.map(encodeTransfer);
+
+      await shouldFail.reverting.withMessage(this.token.encodedBulkTransfer(1, transfers, {from: delegate0}),
+      "Caller not delegate" );
+    });
+
+   
+
   });
 
 
