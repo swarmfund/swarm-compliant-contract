@@ -361,10 +361,10 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
             require(_restrictions.authorize(from, to, value), "Transfer not authorized");
 
             _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
-            require(_restrictions.doTransfer(msg.sender, to, value), "Transfer failed");
+            require(_restrictions.doTransfer(from, to, value), "Transfer failed");
         } else {
             _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
-            _transfer(msg.sender, to, value);
+            _transfer(from, to, value);
         }
 
         return true;
