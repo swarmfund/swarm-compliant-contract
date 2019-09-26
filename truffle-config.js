@@ -86,6 +86,24 @@ module.exports = {
             skipDryRun: false     // Skip dry run before migrations? (default: false for public nets )
         },
 
+        ropstenMnemonic: {
+            provider: () => new HDWalletProvider(mnemonic, `https://ropsten.infura.io/v3/${infuraKey}`),
+            network_id: 3,       // ropsten's id
+            gas: 6500000,        // ropsten has a lower block limit than mainnet
+            confirmations: 2,    // # of confs to wait between deployments. (default: 0)
+            timeoutBlocks: 200,  // # of blocks before a deployment times out  (minimum/default: 50)
+            skipDryRun: false     // Skip dry run before migrations? (default: false for public nets )
+        },
+
+        ropstenPrivateKey: {
+            provider: () => new PrivateKeyProvider(privateKey, `https://ropsten.infura.io/v3/${infuraKey}`),
+            network_id: 3,       // ropsten's id
+            gas: 6500000,        // ropsten has a lower block limit than mainnet
+            confirmations: 2,    // # of confs to wait between deployments. (default: 0)
+            timeoutBlocks: 200,  // # of blocks before a deployment times out  (minimum/default: 50)
+            skipDryRun: false     // Skip dry run before migrations? (default: false for public nets )
+        },
+
         mainnetPrivateKey: {
             provider: () => new PrivateKeyProvider(privateKey, `https://mainnet.infura.io/v3/${infuraKey}`),
             network_id: 1,       // Mainnet's id
@@ -125,18 +143,18 @@ module.exports = {
         // timeout: 100000
     },
 
-    // Configure your compilers
-    compilers: {
-        solc: {
-            version: '0.5.2', // Fetch exact version from solc-bin (default: truffle's version)
-            // docker: true,        // Use "0.5.1" you've installed locally with docker (default: false)
-            // settings: {          // See the solidity docs for advice about optimization and evmVersion
-            //  optimizer: {
-            //    enabled: true,
-            //    runs: 200
-            //  },
-            //  evmVersion: "byzantium"
-            // }
-        }
+  // Configure your compilers
+  compilers: {
+    solc: {
+      version: '0.5.10', // Fetch exact version from solc-bin (default: truffle's version)
+      // docker: true,        // Use "0.5.1" you've installed locally with docker (default: false)
+      // settings: {          // See the solidity docs for advice about optimization and evmVersion
+       optimizer: {
+         enabled: true,
+         runs: 200
+       },
+      //  evmVersion: "byzantium"
+      // }
     }
+  }
 };

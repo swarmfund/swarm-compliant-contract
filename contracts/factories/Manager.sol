@@ -3,8 +3,9 @@ pragma solidity ^0.5.0;
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
-import "../token/ISRC20.sol";
-import "../token/ISRC20Managed.sol";
+import "../interfaces/ISRC20.sol";
+import "../interfaces/ISRC20Managed.sol";
+import "../interfaces/ISRC20Roles.sol";
 
 
 /**
@@ -22,13 +23,13 @@ contract Manager is Ownable {
 
     struct SRC20 {
         address owner;
+        address roles;
         uint256 stake;
         uint256 _swm;
         uint256 _src;
     }
 
     IERC20 private _swmERC20;
-
 
     constructor(address swmERC20) public {
         require(swmERC20 != address(0), 'SWM ERC20 is zero address');
@@ -156,7 +157,7 @@ contract Manager is Ownable {
     {
         require(_registry[src20].owner != address(0), "SRC20 token contract not registered");
 
-        require(ISRC20Managed(src20).renounceManagement());
+        require(ISRC20Roles(_registry[src20].roles).renounceManagement());
 
         return true;
     }
@@ -176,7 +177,7 @@ contract Manager is Ownable {
         require(_registry[src20].owner != address(0), "SRC20 token contract not registered");
         require(newManager != address(0), "newManager address is zero");
 
-        require(ISRC20Managed(src20).transferManagement(newManager));
+        require(ISRC20Roles(_registry[src20].roles).transferManagement(newManager));
 
         return true;
     }
