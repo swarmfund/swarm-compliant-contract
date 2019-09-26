@@ -441,7 +441,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
   });
 
   describe('handling transfer rules', function () {
-    it('should be able to transfer from/to whitelisted address', async function () {
+    it('should be able to transfer when from and to are whitelisted address', async function () {
       await this.roles.addDelegate(delegate0, {from: owner});
       await this.roles.addAuthority(this.tokenTransferRules.address, {from: owner});
       await this.token.updateKYA(kyaHash, kyaUrl, this.tokenTransferRules.address, this.tokenTransferRules.address, {from: delegate0});
@@ -460,11 +460,10 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
       const balanceAccount0 = await this.token.balanceOf(account0);
 
       assert.equal(totalSupply.sub(new BN(value)).eq(balanceOwner), true);
-      // assert.equal(new BN(value).eq(new BN(balanceRulesContract)), true);
       assert.equal(new BN(value).eq(balanceAccount0), true)
     });
 
-    it('should not be able to transfer from/to not whitelisted address', async function () {
+    it('should not be able to transfer when from or to are not whitelisted address', async function () {
       await this.roles.addDelegate(delegate0, {from: owner});
       await this.roles.addAuthority(this.tokenTransferRules.address, {from: owner});
       await this.token.updateKYA(kyaHash, kyaUrl, this.tokenTransferRules.address, this.tokenTransferRules.address, {from: delegate0});
@@ -474,7 +473,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
       await shouldFail.reverting.withMessage(this.token.transfer(account0, value, {from: owner}), 'Transfer not authorized');
     });
 
-    it('should be able to request transfer of funds when from/to are graylisted', async function () {
+    it('should be able to request transfer of funds when from or to are graylisted', async function () {
       await this.roles.addDelegate(delegate0, {from: owner});
       await this.roles.addAuthority(this.tokenTransferRules.address, {from: owner});
       await this.token.updateKYA(kyaHash, kyaUrl, this.tokenTransferRules.address, this.tokenTransferRules.address, {from: delegate0});
@@ -499,7 +498,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
 
     });
 
-    it('should be able to execute transfer request when from/to are graylisted', async function () {
+    it('should be able to execute transfer request when from or to are graylisted', async function () {
       await this.roles.addDelegate(delegate0, {from: owner});
       await this.roles.addAuthority(this.tokenTransferRules.address, {from: owner});
       await this.token.updateKYA(kyaHash, kyaUrl, this.tokenTransferRules.address, this.tokenTransferRules.address, {from: delegate0});
@@ -521,7 +520,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
       assert.equal(new BN(value).eq(balanceAccount0), true);
     });
 
-    it('should be able to cancel transfer request', async function () {
+    it('should be able to cancel transfer request as a owner', async function () {
       await this.roles.addDelegate(delegate0, {from: owner});
       await this.roles.addAuthority(this.tokenTransferRules.address, {from: owner});
       await this.token.updateKYA(kyaHash, kyaUrl, this.tokenTransferRules.address, this.tokenTransferRules.address, {from: delegate0});

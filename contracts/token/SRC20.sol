@@ -355,8 +355,6 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
 
     function transfer(address to, uint256 value) external returns (bool) {
         if (_rules != ITransferRules(0)) {
-            require(_rules.authorize(msg.sender, to, value), "Transfer not authorized");
-
             require(_rules.doTransfer(msg.sender, to, value), "Transfer failed");
         } else {
             _transfer(msg.sender, to, value);
@@ -367,8 +365,6 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
 
     function transferFrom(address from, address to, uint256 value) public returns (bool) {
         if (_rules != ITransferRules(0)) {
-            require(_rules.authorize(from, to, value), "Transfer not authorized");
-
             _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
             require(_rules.doTransfer(from, to, value), "Transfer failed");
         } else {

@@ -11,7 +11,7 @@ import "../interfaces/ITransferRestrictions.sol";
  * @dev Contract that is checking if on-chain rules for token transfers are concluded.
  * It implements whitelist and gray list.
  */
-contract TransferRules is ITransferRules, ITransferRestrictions, ManualApproval, Whitelisted {
+contract TransferRules is ITransferRules, ManualApproval, Whitelisted {
     address private _src20;
 
     modifier onlySRC20 {
@@ -57,27 +57,14 @@ contract TransferRules is ITransferRules, ITransferRestrictions, ManualApproval,
     * @param value The amount of tokens to send.
     */
     function doTransfer(address from, address to, uint256 value) external onlySRC20 returns (bool) {
-        require(
-            (isWhitelisted(from) || isGrayListed(from)) &&
-            (isWhitelisted(to) || isGrayListed(to)),
-            "Transfer not authorized"
-        );
+        require(authorize(from, to, value), "Transfer not authorized");
 
-        if (isWhitelisted(from) && isWhitelisted(to)) {
-            if (isGrayListed(from) || isGrayListed(to)) {
-                _transferRequest(from, to, value);
-            } else {
-                require(ISRC20(_src20).executeTransfer(from, to, value), "SRC20 transfer failed");
-            }
-        }
-
-        if (
-            isGrayListed(from) && isWhitelisted(to) ||
-            isWhitelisted(from) && isGrayListed(to) ||
-            isGrayListed(from) && isGrayListed(to)
-        ) {
+        if (isGrayListed(from) || isGrayListed(to)) {
             _transferRequest(from, to, value);
+            return true;
         }
+
+        require(ISRC20(_src20).executeTransfer(from, to, value), "SRC20 transfer failed");
 
         return true;
     }
