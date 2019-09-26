@@ -4,7 +4,7 @@ const helpers = require('./helpers');
 
 const SRC20Registry = artifacts.require('SRC20RegistryMock');
 const SRC20Factory = artifacts.require('SRC20Factory');
-const SRC20 = artifacts.require('SRC20');
+const SRC20 = artifacts.require('SRC20Mock');
 const SwarmTokenMock = artifacts.require('SwarmTokenMock');
 const SRC20Roles = artifacts.require('SRC20Roles');
 const Featured = artifacts.require('FeaturedMock');
@@ -13,7 +13,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2]) {
   const kyaHash = crypto.createHash('sha256').update(constants.ZERO_ADDRESS).digest();
   const kyaUrl = 'https://www.mvpworkshop.co';
   const swmTotalSupply = new BN(1000000).mul(new BN(10).pow(new BN(36)));
-  const srcTotalSupply = new BN(10000);
+  const srcTotalSupply = new BN(0);
   const features = 0x00;
   const SRC20_DECIMALS = new BN(8); // test with decimals diff
   const SWM_DECIMALS = new BN(18);
@@ -35,9 +35,9 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2]) {
       kyaHash,
       kyaUrl,
       constants.ZERO_ADDRESS,
+      constants.ZERO_ADDRESS,
       this.roles.address,
       this.feature.address,
-      srcTotalSupply,
       {from: owner}
     );
 
@@ -48,6 +48,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2]) {
       new BN(18),
       kyaHash,
       kyaUrl,
+      constants.ZERO_ADDRESS,
       constants.ZERO_ADDRESS,
       this.roles.address,
       this.feature.address,

@@ -4,13 +4,14 @@ import "./ManualApproval.sol";
 import "./Whitelisted.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "../interfaces/ITransferRules.sol";
+import "../interfaces/ITransferRestrictions.sol";
 
 /*
  * @title TransferRules contract
  * @dev Contract that is checking if on-chain rules for token transfers are concluded.
  * It implements whitelist and gray list.
  */
-contract TransferRules is ITransferRules, ManualApproval, Whitelisted {
+contract TransferRules is ITransferRules, ITransferRestrictions, ManualApproval, Whitelisted {
     address private _src20;
 
     modifier onlySRC20 {
@@ -43,7 +44,7 @@ contract TransferRules is ITransferRules, ManualApproval, Whitelisted {
     */
     function authorize(address from, address to, uint256 value) public returns (bool) {
         return (isWhitelisted(from) || isGrayListed(from)) &&
-            (isWhitelisted(to) || isGrayListed(to));
+        (isWhitelisted(to) || isGrayListed(to));
     }
 
     /**
@@ -56,17 +57,26 @@ contract TransferRules is ITransferRules, ManualApproval, Whitelisted {
     * @param value The amount of tokens to send.
     */
     function doTransfer(address from, address to, uint256 value) external onlySRC20 returns (bool) {
+        require(
+            (isWhitelisted(from) || isGrayListed(from)) &&
+            (isWhitelisted(to) || isGrayListed(to)),
+            "Transfer not authorized"
+        );
+
         if (isWhitelisted(from) && isWhitelisted(to)) {
             if (isGrayListed(from) || isGrayListed(to)) {
                 _transferRequest(from, to, value);
             } else {
                 require(ISRC20(_src20).executeTransfer(from, to, value), "SRC20 transfer failed");
             }
-        } else if (isGrayListed(from) && isWhitelisted(to) ||
+        }
+
+        if (
+            isGrayListed(from) && isWhitelisted(to) ||
             isWhitelisted(from) && isGrayListed(to) ||
             isGrayListed(from) && isGrayListed(to)
         ) {
-            require(ISRC20(_src20).executeTransfer(from, to, value), "SRC20 transfer failed");
+            _transferRequest(from, to, value);
         }
 
         return true;

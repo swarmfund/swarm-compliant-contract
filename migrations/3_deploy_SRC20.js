@@ -8,13 +8,11 @@ const {
     SRC20_FEATURES,
     TOKEN_OWNER,
     DEVELOPMENT_SWM_TOKEN_OWNER,
-    DEVELOPMENT_SWM_TOTAL_SUPPLY,
     NAME,
     SYMBOL,
     DECIMALS,
     KYA_HASH,
     KYA_URL,
-    TOTAL_SUPPLY,
 } = process.env;
 
 module.exports = async function (deployer, network) {
@@ -42,8 +40,7 @@ module.exports = async function (deployer, network) {
                             KYA_URL,
                             rules.address,
                             roles.address,
-                            featured.address,
-                            TOTAL_SUPPLY
+                            featured.address
                         );
 
                         console.log('SRC20 contract address: ', tx.logs[2].args.token);
@@ -74,9 +71,9 @@ module.exports = async function (deployer, network) {
                             KYA_HASH,
                             KYA_URL,
                             rules.address,
+                            rules.address,
                             roles.address,
-                            featured.address,
-                            DEVELOPMENT_SWM_TOTAL_SUPPLY
+                            featured.address
                         );
 
                         console.log('SRC20 contract address: ', tx.logs[2].args.token);

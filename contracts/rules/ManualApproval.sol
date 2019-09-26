@@ -16,11 +16,11 @@ contract ManualApproval is Ownable {
         uint256 value;
     }
 
-    uint256 private _reqNumber;
-    ISRC20 private _src20;
+    uint256 public _reqNumber;
+    ISRC20 public _src20;
 
-    mapping(uint256 => TransferReq) private _transferReq;
-    mapping(address => bool) private _grayList;
+    mapping(uint256 => TransferReq) public _transferReq;
+    mapping(address => bool) public _grayList;
 
     event TransferRequest(
         uint256 indexed requestNumber,

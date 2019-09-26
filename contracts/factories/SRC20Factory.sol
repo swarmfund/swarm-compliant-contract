@@ -37,9 +37,9 @@ contract SRC20Factory is Ownable {
         bytes32 kyaHash,
         string memory kyaUrl,
         address restrictions,
+        address rules,
         address roles,
-        address featured,
-        uint256 totalSupply
+        address featured
     ) 
         public onlyOwner returns (bool) 
     {
@@ -52,14 +52,12 @@ contract SRC20Factory is Ownable {
             kyaHash,
             kyaUrl,
             restrictions,
+            rules,
             roles,
-            featured,
-            totalSupply
+            featured
         ));
 
         _registry.put(token, roles, tokenOwner);
-
-//      transfer managership from owner to contract that will handle staking/minting - currently manual
 
         emit SRC20Created(token);
         return true;

@@ -15,14 +15,6 @@ contract DelegateRole {
 
     Roles.Role private _delegates;
 
-    /**
-     * @dev Throws if called by any account other than the delegate.
-     */
-    modifier onlyDelegate() {
-        require(_hasDelegate(msg.sender));
-        _;
-    }
-
     function _addDelegate(address account) internal {
         _delegates.add(account);
         emit DelegateAdded(account);
