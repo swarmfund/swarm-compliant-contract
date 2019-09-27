@@ -12,7 +12,8 @@ const TokenDataRestrictionMock = artifacts.require('TokenDataRestrictionMock');
 contract('SRC20', async function ([_, manager, owner, authority0, authority1, account0, account1, delegate0]) {
   const kyaHash = crypto.createHash('sha256').update(constants.ZERO_ADDRESS).digest();
   const kyaUrl = 'https://www.mvpworkshop.co';
-  const totalSupply = new BN(10000);
+  const totalSupply = new BN(10000000);
+  const maxTokenSupply = new BN(10000000000000)
   const value = 100;
   const expDate = moment().unix() + (60 * 60 * 24);// one day from current time
   const accounts = helpers.accounts;
@@ -33,7 +34,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
       kyaUrl,
       constants.ZERO_ADDRESS,
       features,
-      totalSupply,
+      maxTokenSupply,
       {from: manager}
     );
   });

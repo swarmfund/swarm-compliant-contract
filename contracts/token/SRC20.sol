@@ -24,9 +24,9 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
-    mapping(address => uint256) private _balances;
-    mapping(address => mapping(address => uint256)) private _allowances;
-    uint256 private _totalSupply;
+    mapping(address => uint256) public _balances;
+    mapping(address => mapping(address => uint256)) public _allowances;
+    uint256 public _totalSupply;
 
     mapping(address => uint256) private _nonce;
 
@@ -36,6 +36,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     }
 
     KYA private _kya;
+    uint256 _maxTokenSupply;
 
     /**
      * @description Configured contract implementing token restriction(s).
@@ -55,7 +56,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         string memory kyaUrl,
         address restrictions,
         uint8 features,
-        uint256 totalSupply
+        uint256 maxTokenSupply
     )
     SRC20Detailed(name, symbol, decimals)
     Featured(features)
@@ -63,8 +64,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     {
         _transferOwnership(owner);
 
-        _totalSupply = totalSupply;
-        _balances[owner] = _totalSupply;
+        _maxTokenSupply = maxTokenSupply;
         _updateKYA(kyaHash, kyaUrl, restrictions);
     }
 
@@ -553,6 +553,8 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         require(account != address(0), 'minting to zero address');
 
         _totalSupply = _totalSupply.add(value);
+        require(_totalSupply <= _maxTokenSupply, 'trying to mint too many tokens!');
+
         _balances[account] = _balances[account].add(value);
 
         emit Transfer(address(0), account, value);

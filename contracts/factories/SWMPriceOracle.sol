@@ -15,7 +15,7 @@ import "../interfaces/IPriceUSD.sol";
  */
 contract SWMPriceOracle is IPriceUSD, Ownable {
 
-    event updatedSWMPrice(uint256 oldPrice, uint256 newPrice);
+    event UpdatedSWMPrice(uint256 oldPrice, uint256 newPrice);
 
     uint256 public _SWMPriceUSD;
 
@@ -45,5 +45,4 @@ contract SWMPriceOracle is IPriceUSD, Ownable {
         emit updatedSWMPrice(_SWMPriceUSD, newSWMPriceUSD);
         return true;
     }
-
 }

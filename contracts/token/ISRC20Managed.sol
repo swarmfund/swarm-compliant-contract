@@ -11,4 +11,6 @@ interface ISRC20Managed {
 
     function renounceManagement() external returns (bool);
     function transferManagement(address newManager) external returns (bool);
+
+    function manager() external view returns (address);
 }

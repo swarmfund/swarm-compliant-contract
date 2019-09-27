@@ -3,7 +3,6 @@ pragma solidity ^0.5.0;
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
-import "../token/ISRC20.sol";
 import "../token/ISRC20Managed.sol";
 
 
@@ -21,14 +20,13 @@ contract Manager is Ownable {
     mapping (address => SRC20) internal _registry;
 
     struct SRC20 {
-        address owner;
+        address owner; // @TODO remove from struct, wherever used it is available as function parameter
         uint256 stake;
         uint256 _swm;
         uint256 _src;
     }
 
     IERC20 private _swmERC20;
-
 
     constructor(address swmERC20) public {
         require(swmERC20 != address(0), 'SWM ERC20 is zero address');
@@ -38,6 +36,13 @@ contract Manager is Ownable {
 
     modifier onlyTokenOwner(address src20) {
         require(_isTokenOwner(src20), "caller not token owner");
+        _;
+    }
+
+    // Note that, like with token owner, there is only one manager per src20 token contract. 
+    // It's not a role that a number of addresses can have. Only one.
+    modifier onlyManager(address src20) {
+        require(msg.sender == ISRC20Managed(src20).manager(), "caller not token manager");
         _;
     }
 
@@ -59,7 +64,7 @@ contract Manager is Ownable {
      * @return true on success.
      */
     function mintSupply(address src20, address swmAccount, uint256 swmValue, uint256 src20Value)
-        onlyOwner
+        onlyManager(src20)
         external
         returns (bool)
     {
@@ -151,7 +156,7 @@ contract Manager is Ownable {
      */
     function renounceManagement(address src20)
         external
-        onlyOwner
+        onlyManager(src20)
         returns (bool)
     {
         require(_registry[src20].owner != address(0), "SRC20 token contract not registered");

@@ -17,11 +17,13 @@ contract SRC20Mock is SRC20 {
         string memory kyaUrl,
         address restrictions,
         uint8 features,
-        uint256 totalSupply
+        uint256 maxTokenSupply
     )
-        SRC20(owner, name, symbol, decimals, kyaHash, kyaUrl, restrictions, features, totalSupply)
+        SRC20(owner, name, symbol, decimals, kyaHash, kyaUrl, restrictions, features, maxTokenSupply)
         public
     {
+        _totalSupply = 10000000; //maxTokenSupply; //totalSupply;
+        _balances[owner] = _totalSupply;
     }
 
     /**

@@ -39,7 +39,7 @@ contract SRC20Factory is Ownable {
         string memory kyaUrl,
         address restrictions,
         uint8 features,
-        uint256 totalSupply
+        uint256 maxTokenSupply
     ) 
         public onlyOwner returns (bool) 
     {
@@ -53,7 +53,7 @@ contract SRC20Factory is Ownable {
             kyaUrl,
             restrictions,
             features,
-            totalSupply
+            maxTokenSupply
         ));
 
         _registry.put(token, tokenOwner);
