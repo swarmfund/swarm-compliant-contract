@@ -24,6 +24,7 @@ contract Manager is Ownable {
         uint256 stake;
         uint256 _swm;
         uint256 _src;
+        address minter;
     }
 
     IERC20 private _swmERC20;
@@ -41,8 +42,8 @@ contract Manager is Ownable {
 
     // Note that, like with token owner, there is only one manager per src20 token contract. 
     // It's not a role that a number of addresses can have. Only one.
-    modifier onlyManager(address src20) {
-        require(msg.sender == ISRC20Managed(src20).manager(), "caller not token manager");
+    modifier onlyMinter(address src20) {
+        require(msg.sender == _registry[src20].minter, "caller not token minter");
         _;
     }
 
@@ -64,7 +65,7 @@ contract Manager is Ownable {
      * @return true on success.
      */
     function mintSupply(address src20, address swmAccount, uint256 swmValue, uint256 src20Value)
-        onlyManager(src20)
+        onlyMinter(src20)
         external
         returns (bool)
     {

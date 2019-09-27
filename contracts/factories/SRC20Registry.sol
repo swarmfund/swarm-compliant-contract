@@ -17,9 +17,11 @@ contract SRC20Registry is Manager {
     event FactoryRemoved(address account);
     event SRC20Registered(address token, address tokenOwner);
     event SRC20Removed(address token);
-    
-    Roles.Role private _factories;
+    event MinterAdded(address minter);
+    event MinterRemoved(address minter);
 
+    Roles.Role private _factories;
+    mapping (address => bool) _authorizedMinters;
 
     /**
      * @dev constructor requiring SWM ERC20 contract address.
@@ -72,12 +74,14 @@ contract SRC20Registry is Manager {
      * @param tokenOwner Owner of the token.
      * @return True on success.
      */
-    function put(address token, address tokenOwner) external returns (bool) {
+    function put(address token, address tokenOwner, address minter) external returns (bool) {
         require(token != address(0), "token is zero address");
         require(tokenOwner != address(0), "tokenOwner is zero address");
         require(_factories.has(msg.sender), "factory not registered");
+        require(_authorizedMinters[minter] == true, 'minter not authorized');
 
         _registry[token].owner = tokenOwner;
+        _registry[token].minter = minter;
 
         emit SRC20Registered(token, tokenOwner);
 
@@ -114,4 +118,38 @@ contract SRC20Registry is Manager {
     function contains(address token) external view returns (bool) {
         return _registry[token].owner != address(0);
     }
+
+    /**
+     *  This proxy function adds a contract to the list of authorized minters
+     *
+     *  @param minter The address of the minter contract to add to the list of authorized minters
+     *  @return true on success
+     */
+    function addMinter(address minter) external onlyOwner returns (bool) {
+        require(minter != address(0), "minter is zero address");
+
+        _authorizedMinters[minter] = true;
+
+        emit MinterAdded(minter);
+
+        return true;
+    }
+
+    /**
+     *  This proxy function removes a contract from the list of authorized minters
+     *
+     *  @param minter The address of the minter contract to remove from the list of authorized minters
+     *  @return true on success
+     */
+    function removeMinter(address minter) external onlyOwner returns (bool) {
+        require(account != address(0), "minter is zero address");
+
+        _authorizedMinters[minter] = false;
+
+        emit MinterRemoved(minter);
+
+        return true;
+    }
+
+
 }

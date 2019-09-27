@@ -6,10 +6,10 @@ import "../interfaces/IBookValueUSD.sol";
 import "../interfaces/IPriceUSD.sol";
 
 /**
- * @title SelfServiceManager
+ * @title SelfServiceMinter
  * @dev Serves as proxy (manager) for SRC20 minting/burning.
  */
-contract SelfServiceManager {
+contract SelfServiceMinter {
 
     IManager public _registry;
     IBookValueUSD public _asset;
@@ -96,16 +96,8 @@ contract SelfServiceManager {
     {
         uint256 numSWMTokens = calcStake(_asset.getBookValueUSD(src20));
 
-        _registry.mintSupply(src20, msg.sender, numSWMTokens, numSRC20Tokens);
+        require(_registry.mintSupply(src20, msg.sender, numSWMTokens, numSRC20Tokens),'supply minting failed');
 
         return true;
     }
-
-    /// burn src20 token and get back stake based on price.
-    /// Phase II!
-    function burnTokens(uint256 _value) external pure returns (bool) {
-
-        return true;
-    }
-
 }
