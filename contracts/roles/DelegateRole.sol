@@ -2,7 +2,6 @@ pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/access/Roles.sol";
 
-
 /**
  * @title DelegateRole
  * @dev Delegate is accounts allowed to do certain operations on
@@ -10,19 +9,11 @@ import "openzeppelin-solidity/contracts/access/Roles.sol";
  */
 contract DelegateRole {
     using Roles for Roles.Role;
-    
+
     event DelegateAdded(address indexed account);
     event DelegateRemoved(address indexed account);
 
     Roles.Role private _delegates;
-
-    /**
-     * @dev Throws if called by any account other than the delegate.
-     */
-    modifier onlyDelegate() {
-        require(_hasDelegate(msg.sender));
-        _;
-    }
 
     function _addDelegate(address account) internal {
         _delegates.add(account);

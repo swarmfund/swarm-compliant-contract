@@ -3,6 +3,7 @@ pragma solidity ^0.5.0;
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/access/Roles.sol";
 import "./Manager.sol";
+import "../interfaces/ISRC20Registry.sol";
 
 
 /**
@@ -10,7 +11,7 @@ import "./Manager.sol";
  * SRC20 token. Registered factories can put addresses of
  * new tokens, public can query tokens.
  */
-contract SRC20Registry is Manager {
+contract SRC20Registry is ISRC20Registry, Manager {
     using Roles for Roles.Role;
 
     event FactoryAdded(address account);
@@ -18,7 +19,7 @@ contract SRC20Registry is Manager {
     event SRC20Registered(address token, address tokenOwner);
     event SRC20Removed(address token);
     event MinterAdded(address minter);
-    event MinterRemoved(address minter);
+    event MinterRemoved(address minter); // @TODO move to interface
 
     Roles.Role private _factories;
     mapping (address => bool) _authorizedMinters;
@@ -68,19 +69,22 @@ contract SRC20Registry is Manager {
 
     /**
      * @dev Adds token to registry. Allowed only to factories.
-     * Emits TokenRegistered event.
+     * Emits SRC20Registered event.
      *
      * @param token The token address.
+     * @param roles roles SRC20Roles contract address.
      * @param tokenOwner Owner of the token.
      * @return True on success.
      */
-    function put(address token, address tokenOwner, address minter) external returns (bool) {
+    function put(address token, address roles, address tokenOwner, address minter) external returns (bool) {
         require(token != address(0), "token is zero address");
+        require(roles != address(0), "roles is zero address");
         require(tokenOwner != address(0), "tokenOwner is zero address");
         require(_factories.has(msg.sender), "factory not registered");
         require(_authorizedMinters[minter] == true, 'minter not authorized');
 
         _registry[token].owner = tokenOwner;
+        _registry[token].roles = roles;
         _registry[token].minter = minter;
 
         emit SRC20Registered(token, tokenOwner);
@@ -99,10 +103,7 @@ contract SRC20Registry is Manager {
         require(token != address(0), "token is zero address");
         require(_registry[token].owner != address(0), "token not registered");
 
-        delete _registry[token].owner;
-        delete _registry[token].stake;
-        delete _registry[token]._swm;
-        delete _registry[token]._src;
+        delete _registry[token];
 
         emit SRC20Removed(token);
 
@@ -142,7 +143,7 @@ contract SRC20Registry is Manager {
      *  @return true on success
      */
     function removeMinter(address minter) external onlyOwner returns (bool) {
-        require(account != address(0), "minter is zero address");
+        require(minter != address(0), "minter is zero address");
 
         _authorizedMinters[minter] = false;
 
@@ -150,6 +151,4 @@ contract SRC20Registry is Manager {
 
         return true;
     }
-
-
 }

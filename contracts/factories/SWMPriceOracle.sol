@@ -22,7 +22,8 @@ contract SWMPriceOracle is IPriceUSD, Ownable {
     constructor(uint256 newSWMPriceUSD) 
     public {
         _SWMPriceUSD = newSWMPriceUSD;
-        emit updatedSWMPrice(0, _SWMPriceUSD);
+
+        emit UpdatedSWMPrice(0, _SWMPriceUSD);
     }
 
     /**
@@ -42,7 +43,9 @@ contract SWMPriceOracle is IPriceUSD, Ownable {
      */
     function updatePrice(uint256 newSWMPriceUSD) external onlyOwner returns (bool) {
         _SWMPriceUSD = newSWMPriceUSD;
-        emit updatedSWMPrice(_SWMPriceUSD, newSWMPriceUSD);
+
+        emit UpdatedSWMPrice(_SWMPriceUSD, newSWMPriceUSD);
+
         return true;
     }
 }

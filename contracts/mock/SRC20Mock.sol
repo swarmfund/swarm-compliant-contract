@@ -2,7 +2,6 @@ pragma solidity ^0.5.0;
 
 import "../token/SRC20.sol";
 
-
 /**
  * @title SRC20Mock contract
  * @dev SRC20 mock contract for tests.
@@ -16,20 +15,16 @@ contract SRC20Mock is SRC20 {
         bytes32 kyaHash,
         string memory kyaUrl,
         address restrictions,
-        uint8 features,
-        uint256 maxTokenSupply
+        address rules,
+        address roles,
+        address featured,
+        uint256 totalSupply,
+        uint256 maxTotalSupply
     )
-        SRC20(owner, name, symbol, decimals, kyaHash, kyaUrl, restrictions, features, maxTokenSupply)
+        SRC20(owner, name, symbol, decimals, kyaHash, kyaUrl, restrictions, rules, roles, featured, maxTotalSupply)
         public
     {
-        _totalSupply = 10000000; //maxTokenSupply; //totalSupply;
+        _totalSupply = totalSupply;
         _balances[owner] = _totalSupply;
-    }
-
-    /**
-     * @dev Setting up features for test cases.
-     */
-    function featureEnable(uint8 features) public {
-        _enable(features);
     }
 }

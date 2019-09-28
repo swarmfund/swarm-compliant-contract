@@ -21,9 +21,9 @@ contract Asset is IBookValueUSD, Ownable {
         return assetsValuesUSD[src20];
     }
 
-    function setAssetValueUSD(address _src20, uint256 _newAssetValueUSD) external onlyOwner returns (uint256) {
+    function setAssetValueUSD(address _src20, uint256 _newAssetValueUSD) external onlyOwner returns (bool) {
         assetsValuesUSD[_src20] = _newAssetValueUSD;
         emit AssetValueUSDUpdated(_src20, _newAssetValueUSD);
+        return true;
     }
-
 }

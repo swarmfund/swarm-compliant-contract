@@ -3,7 +3,9 @@ pragma solidity ^0.5.0;
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
-import "../token/ISRC20Managed.sol";
+import "../interfaces/ISRC20.sol";
+import "../interfaces/ISRC20Managed.sol";
+import "../interfaces/ISRC20Roles.sol";
 
 
 /**
@@ -20,7 +22,8 @@ contract Manager is Ownable {
     mapping (address => SRC20) internal _registry;
 
     struct SRC20 {
-        address owner; // @TODO remove from struct, wherever used it is available as function parameter
+        address owner;
+        address roles;
         uint256 stake;
         uint256 _swm;
         uint256 _src;
@@ -40,7 +43,7 @@ contract Manager is Ownable {
         _;
     }
 
-    // Note that, like with token owner, there is only one manager per src20 token contract. 
+    // Note that, like with token owner, there is only one manager per src20 token contract.
     // It's not a role that a number of addresses can have. Only one.
     modifier onlyMinter(address src20) {
         require(msg.sender == _registry[src20].minter, "caller not token minter");
@@ -157,12 +160,12 @@ contract Manager is Ownable {
      */
     function renounceManagement(address src20)
         external
-        onlyManager(src20)
+        onlyOwner
         returns (bool)
     {
         require(_registry[src20].owner != address(0), "SRC20 token contract not registered");
 
-        require(ISRC20Managed(src20).renounceManagement());
+        require(ISRC20Roles(_registry[src20].roles).renounceManagement());
 
         return true;
     }
@@ -182,7 +185,7 @@ contract Manager is Ownable {
         require(_registry[src20].owner != address(0), "SRC20 token contract not registered");
         require(newManager != address(0), "newManager address is zero");
 
-        require(ISRC20Managed(src20).transferManagement(newManager));
+        require(ISRC20Roles(_registry[src20].roles).transferManagement(newManager));
 
         return true;
     }
