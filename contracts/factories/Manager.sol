@@ -6,13 +6,14 @@ import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/ISRC20.sol";
 import "../interfaces/ISRC20Managed.sol";
 import "../interfaces/ISRC20Roles.sol";
+import "../interfaces/IManager.sol";
 
 
 /**
  * @dev Manager handles SRC20 burn/mint in relation to
  * SWM token staking.
  */
-contract Manager is Ownable {
+contract Manager is IManager, Ownable {
     using SafeMath for uint256;
 
     event SRC20SupplyMinted(address src20, address swmAccount, uint256 swmValue, uint256 src20Value);
@@ -39,14 +40,14 @@ contract Manager is Ownable {
     }
 
     modifier onlyTokenOwner(address src20) {
-        require(_isTokenOwner(src20), "caller not token owner");
+        require(_isTokenOwner(src20), "Caller not token owner.");
         _;
     }
 
     // Note that, like with token owner, there is only one manager per src20 token contract.
     // It's not a role that a number of addresses can have. Only one.
     modifier onlyMinter(address src20) {
-        require(msg.sender == _registry[src20].minter, "caller not token minter");
+        require(msg.sender == _registry[src20].minter, "Caller not token minter.");
         _;
     }
 

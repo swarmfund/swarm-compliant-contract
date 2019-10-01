@@ -95,7 +95,7 @@ contract SelfServiceMinter {
     {
         uint256 numSWMTokens = calcStake(_asset.getBookValueUSD(src20));
 
-        require(_registry.mintSupply(src20, msg.sender, numSWMTokens, numSRC20Tokens),'supply minting failed');
+        require(_registry.mintSupply(src20, msg.sender, numSWMTokens, numSRC20Tokens), 'supply minting failed');
 
         return true;
     }

@@ -7,7 +7,7 @@ const SRC20Factory = artifacts.require('SRC20Factory');
 const SRC20 = artifacts.require('SRC20');
 const SwarmTokenMock = artifacts.require('SwarmTokenMock');
 
-contract('SRC20Factory', function ([_, owner, account0, account1]) {
+contract('SelfServiceManager', function ([_, owner, account0, account1]) {
   const kyaHash = crypto.createHash('sha256').update(constants.ZERO_ADDRESS).digest();
   const kyaUrl = 'https://www.mvpworkshop.co';
   const swmTotalSupply = new BN(1000000).mul(new BN(10).pow(new BN(36)));

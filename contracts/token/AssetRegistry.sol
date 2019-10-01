@@ -1,6 +1,7 @@
 pragma solidity ^0.5.0;
 
 import "../interfaces/ISRC20Roles.sol";
+import "./SRC20.sol";
 import "../interfaces/IAssetRegistry.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
@@ -26,7 +27,7 @@ contract AssetRegistry is IAssetRegistry, Ownable {
     }
 
     modifier onlyDelegate(address src20) {
-        require(ISRC20Roles(src20).isDelegate(msg.sender), "Caller not delegate");
+        require(SRC20(src20)._roles().isDelegate(msg.sender), "Caller not delegate");
         _;
     }
 
