@@ -7,6 +7,12 @@ import "./IPausable.sol";
  * @dev Support for "SRC20 feature" modifier.
  */
 contract IFeatured is IPausable, IFreezable {
+    
+    event AccountFrozen(address indexed account);
+    event AccountUnfrozen(address indexed account);
+    event TokenFrozen();
+    event TokenUnfrozen();
+    
     uint8 public constant ForceTransfer = 0x01;
     uint8 public constant Pausable = 0x02;
     uint8 public constant AccountBurning = 0x04;

@@ -9,7 +9,7 @@ contract ISRC20Registry {
     event SRC20Registered(address token, address tokenOwner);
     event SRC20Removed(address token);
 
-    function put(address token, address roles, address tokenOwner) external returns (bool);
+    function put(address token, address roles, address tokenOwner, address minter) external returns (bool);
     function remove(address token) external returns (bool);
     function contains(address token) external view returns (bool);
 

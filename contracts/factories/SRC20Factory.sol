@@ -23,42 +23,49 @@ contract SRC20Factory is Ownable {
     }
 
     /**
-     * @dev Creates new SRC20 contract. Expects token properties and
-     * desired capabilities of the token. Only factory owner can call
+     * Creates new SRC20 contract. Expects token properties and
+     * desired capabilities of the token. Only SRC20Factory owner can call
      * this function.
      * Emits SRC20Created event with address of new token.
+     * @dev The address list has to be constructed according to the 
+     * definition privided in the comments.
+     * @dev Array is used to avoid "stack too deep" error
      */
     function create(
-        // contract parameters
-        address tokenOwner,
         string memory name,
         string memory symbol,
         uint8 decimals,
-        bytes32 kyaHash,
-        string memory kyaUrl,
-        address restrictions,
-        address rules,
-        address roles,
-        address featured,
-        uint256 maxTotalSupply
+        uint256 maxTotalSupply,
+        address[] memory addressList
+                     //  addressList[0] tokenOwner,
+                     //  addressList[1] restrictions,
+                     //  addressList[2] rules,
+                     //  addressList[3] roles,
+                     //  addressList[4] featured,
+                     //  addressList[5] asset,
+                     //  addressList[6] minter
     )
         public onlyOwner returns (bool) 
     {
         address token = address(new SRC20(
-            tokenOwner,
             name,
             symbol,
             decimals,
-            kyaHash,
-            kyaUrl,
-            restrictions,
-            rules,
-            roles,
-            featured,
-            maxTotalSupply
+            maxTotalSupply,
+            addressList[0], // tokenOwner
+            addressList[1], // restrictions
+            addressList[2], // rules
+            addressList[3], // roles
+            addressList[4], // featured
+            addressList[5]  // asset
         ));
 
-        _registry.put(token, roles, tokenOwner);
+        _registry.put(
+            token, 
+            addressList[3], // roles
+            addressList[0], // tokenOwner
+            addressList[6]  // minter
+        );
 
         emit SRC20Created(token);
 

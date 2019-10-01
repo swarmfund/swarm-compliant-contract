@@ -4,7 +4,7 @@ pragma solidity ^0.5.0;
  * @title SRC20 public interface
  */
 interface ISRC20 {
-    function getKYA() external view returns (bytes32, string memory, address);
+    //function getKYA() external view returns (bytes32, string memory, address);
 
     function transferToken(address to, uint256 value, uint256 nonce, uint256 expirationTime,
         bytes32 msgHash, bytes calldata signature) external returns (bool);
