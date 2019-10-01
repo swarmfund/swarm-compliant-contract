@@ -3,6 +3,7 @@ pragma solidity ^0.5.0;
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "../token/SRC20.sol";
 import "../interfaces/ISRC20Registry.sol";
+import "../interfaces/IAssetRegistry.sol";
 
 /**
  * @dev Factory that creates SRC20 token for requested token
@@ -28,7 +29,7 @@ contract SRC20Factory is Ownable {
      * this function.
      * Emits SRC20Created event with address of new token.
      * @dev The address list has to be constructed according to the 
-     * definition privided in the comments.
+     * definition provided in the comments.
      * @dev Array is used to avoid "stack too deep" error
      */
     function create(
@@ -36,6 +37,9 @@ contract SRC20Factory is Ownable {
         string memory symbol,
         uint8 decimals,
         uint256 maxTotalSupply,
+        bytes32 kyaHash,
+        string memory kyaUrl,
+        uint256 bookValueUSD,
         address[] memory addressList
                      //  addressList[0] tokenOwner,
                      //  addressList[1] restrictions,
@@ -52,12 +56,7 @@ contract SRC20Factory is Ownable {
             symbol,
             decimals,
             maxTotalSupply,
-            addressList[0], // tokenOwner
-            addressList[1], // restrictions
-            addressList[2], // rules
-            addressList[3], // roles
-            addressList[4], // featured
-            addressList[5]  // asset
+            addressList
         ));
 
         _registry.put(
@@ -66,6 +65,8 @@ contract SRC20Factory is Ownable {
             addressList[0], // tokenOwner
             addressList[6]  // minter
         );
+
+        IAssetRegistry(addressList[5]).addAsset(token, kyaHash, kyaUrl, bookValueUSD);
 
         emit SRC20Created(token);
 

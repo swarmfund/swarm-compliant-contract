@@ -10,7 +10,6 @@ import "../interfaces/IPriceUSD.sol";
  * @dev Serves as proxy (manager) for SRC20 minting/burning.
  */
 contract SelfServiceMinter {
-
     IManager public _registry;
     IBookValueUSD public _asset;
     IPriceUSD public _SWMPriceOracle;

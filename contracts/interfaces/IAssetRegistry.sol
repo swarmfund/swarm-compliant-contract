@@ -4,7 +4,7 @@ pragma solidity ^0.5.0;
  * AssetRegistry holds the real-world/offchain properties of the various Assets being tokenized.
  * It provides functions for getting/setting these properties.
  */
-interface IAssetRegistry  {
+interface IAssetRegistry {
 
     event AssetAdded(address indexed src20, bytes32 kyaHash, string kyaUrl, uint256 AssetValueUSD);
     event AssetBookValueUSDUpdated(address indexed src20, uint256 AssetValueUSD);

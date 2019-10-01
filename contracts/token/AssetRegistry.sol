@@ -16,16 +16,22 @@ contract AssetRegistry is IAssetRegistry, Ownable {
         uint256 bookValueUSD;
     }
 
+    address public _src20Factory;
+
     mapping(address => AssetType) public assetList;
 
-    modifier onlyAssetOwner(address src20) {
-        require(Ownable(src20).owner() == msg.sender, "Caller not owner");
+    modifier onlyFactory() {
+        require(_src20Factory == msg.sender, "Caller not factory");
         _;
     }
 
     modifier onlyDelegate(address src20) {
         require(ISRC20Roles(src20).isDelegate(msg.sender), "Caller not delegate");
         _;
+    }
+
+    constructor(address src20Factory) public {
+        _src20Factory = src20Factory;
     }
 
     /**
@@ -39,7 +45,7 @@ contract AssetRegistry is IAssetRegistry, Ownable {
      */
     function addAsset(address src20, bytes32 kyaHash, string calldata kyaUrl, uint256 bookValueUSD)
         external
-        onlyAssetOwner(src20)
+        onlyFactory
         returns (bool)
     {
         require(assetList[src20].bookValueUSD == 0, 'Asset already added, try update functions');
@@ -53,7 +59,7 @@ contract AssetRegistry is IAssetRegistry, Ownable {
     }
 
     /**
-     * Gets the currently valid book balue for a token.
+     * Gets the currently valid book value for a token.
      *
      * @param src20 the token address.
      * @return The current book value of the token.
@@ -63,7 +69,7 @@ contract AssetRegistry is IAssetRegistry, Ownable {
     }
 
     /**
-     * Sets the currently valid book balue for a token.
+     * Sets the currently valid book value for a token.
      *
      * @param src20 the token address.
      * @param bookValueUSD the new value we're setting 

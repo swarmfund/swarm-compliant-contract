@@ -34,7 +34,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
 
     ISRC20Roles public _roles;
     IFeatured public _features;
-    
+
     IAssetRegistry public _assetRegistry;
 
     /**
@@ -79,25 +79,25 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
         string memory symbol,
         uint8 decimals,
         uint256 maxTotalSupply,
-        address owner,
-        address restrictions,
-        address rules,
-        address roles,
-        address featured,
-        address assetRegistry
+        address[] memory addressList
+                    //  addressList[0] tokenOwner,
+                    //  addressList[1] restrictions,
+                    //  addressList[2] rules,
+                    //  addressList[3] roles,
+                    //  addressList[4] featured,
+                    //  addressList[5] assetRegistry
     )
     SRC20Detailed(name, symbol, decimals)
     public
     {
-        _transferOwnership(owner);
-
-        _assetRegistry = IAssetRegistry(assetRegistry);
+        _assetRegistry = IAssetRegistry(addressList[5]);
+        _transferOwnership(addressList[0]);
 
         _maxTotalSupply = maxTotalSupply;
-        _updateRestrictionsAndRules(restrictions, rules);
+        _updateRestrictionsAndRules(addressList[1], addressList[2]);
 
-        _roles = ISRC20Roles(roles);
-        _features = IFeatured(featured);
+        _roles = ISRC20Roles(addressList[3]);
+        _features = IFeatured(addressList[4]);
     }
 
     /**
