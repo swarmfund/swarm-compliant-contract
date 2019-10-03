@@ -38,9 +38,7 @@ contract SelfServiceMinter {
      */
     function calcStake(uint256 netAssetValueUSD) public view returns (uint256) {
 
-        uint256 NAV = netAssetValueUSD; /// Value in USD
-
-        uint256 SWMPriceUSD = _SWMPriceOracle.getPrice(); /// Price is in cents! GUI needs to know this
+        uint256 NAV = netAssetValueUSD; // Value in USD, an integer
         uint256 stakeUSD;
 
         if(NAV > 0 && NAV <= 500000) // Up to 500,000 NAV the stake is flat at 2,500 USD
@@ -67,7 +65,9 @@ contract SelfServiceMinter {
         if(NAV > 150000000) // From 150M up stake is 0.10%
             stakeUSD = NAV * 1 / 1000;
 
-        return (stakeUSD / SWMPriceUSD);
+        (uint256 numerator, uint denominator) = _SWMPriceOracle.getPrice(); // 0.04 is returned as (4, 100)
+
+        return stakeUSD * denominator / numerator;
 
     } /// fn calcStake
 

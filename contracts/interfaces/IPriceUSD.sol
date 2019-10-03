@@ -5,6 +5,6 @@ pragma solidity ^0.5.0;
  */
 interface IPriceUSD {
 
-    function getPrice() external view returns (uint256);
+    function getPrice() external view returns (uint256 numerator, uint256 denominator);
 
 }

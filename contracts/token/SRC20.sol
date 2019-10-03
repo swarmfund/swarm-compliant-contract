@@ -478,7 +478,7 @@ contract SRC20 is ISRC20, ISRC20Managed, SRC20Detailed, Ownable {
         require(account != address(0), 'minting to zero address');
 
         _totalSupply = _totalSupply.add(value);
-        require(_maxTotalSupply == 0 || _totalSupply <= _maxTotalSupply, 'trying to mint too many tokens!');
+        require(_totalSupply <= _maxTotalSupply || _maxTotalSupply == 0, 'trying to mint too many tokens!');
 
         _balances[account] = _balances[account].add(value);
 
