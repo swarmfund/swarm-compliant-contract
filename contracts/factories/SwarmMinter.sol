@@ -16,7 +16,7 @@ contract SwarmMinter is Ownable {
     }
 
     /**
-     *  This proxy function calls calls the SRC20Registry function that will do two things
+     *  This proxy function calls the SRC20Registry function that will do two things
      *  Note: prior to this, the msg.sender has to call approve() on the SWM ERC20 contract
      *        and allow the Manager to withdraw SWM tokens
      *  1. Withdraw the SWM tokens that are required for staking
