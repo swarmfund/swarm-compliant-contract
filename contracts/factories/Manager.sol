@@ -44,8 +44,8 @@ contract Manager is IManager, Ownable {
         _;
     }
 
-    // Note that, like with token owner, there is only one manager per src20 token contract.
-    // It's not a role that a number of addresses can have. Only one.
+    // Note that, similarly to the role of token owner, there is only one manager per src20 token contract.
+    // Only one address can have this role.
     modifier onlyMinter(address src20) {
         require(msg.sender == _registry[src20].minter, "Caller not token minter.");
         _;
@@ -92,7 +92,7 @@ contract Manager is IManager, Ownable {
 
     /**
      * @dev Increase stake and mint SRC20 tokens based on current SWM/SRC20 ratio.
-     * Only SRC20 Token owner can invoke this method.
+     * Only SRC20 token owner can invoke this method.
      * Emits SRC20StakeIncreased event.
      *
      * @param src20 SRC20 token address.
