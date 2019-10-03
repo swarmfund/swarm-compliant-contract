@@ -27,7 +27,7 @@ contract SelfServiceMinter {
 
     /**
      *  Calculate how many SWM tokens need to be staked to tokenize an asset
-     *  This function is custom for each Self Service Minter contract
+     *  This function is custom for each GetRateMinter contract
      *  Specification: https://docs.google.com/document/d/1Z-XuTxGf5LQudO5QLmnSnD-k3nTb0tlu3QViHbOSQXo/
      *
      *  Note: The stake requirement depends only on the asset USD value and USD/SWM exchange rate (SWM price).
@@ -72,7 +72,7 @@ contract SelfServiceMinter {
     } /// fn calcStake
 
     /**
-     *  This proxy function calls calls the SRC20Registry function that will do two things
+     *  This proxy function calls the SRC20Registry function that will do two things
      *  Note: prior to this, the msg.sender has to call approve() on the SWM ERC20 contract
      *        and allow the Manager to withdraw SWM tokens
      *  1. Withdraw the SWM tokens that are required for staking
