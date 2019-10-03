@@ -7,8 +7,8 @@ import "../interfaces/ISRC20Registry.sol";
 
 
 /**
- * @dev SRC20 registry contains addresses of every created 
- * SRC20 token. Registered factories can put addresses of
+ * @dev SRC20 registry contains the address of every created 
+ * SRC20 token. Registered factories can add addresses of
  * new tokens, public can query tokens.
  */
 contract SRC20Registry is ISRC20Registry, Manager {
@@ -68,7 +68,7 @@ contract SRC20Registry is ISRC20Registry, Manager {
     }
 
     /**
-     * @dev Adds token to registry. Allowed only to factories.
+     * @dev Adds token to registry. Only factories can add.
      * Emits SRC20Registered event.
      *
      * @param token The token address.
