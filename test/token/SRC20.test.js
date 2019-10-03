@@ -512,14 +512,14 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
       await shouldFail.reverting.withMessage(this.token.transfer(account0, value, {from: owner}), 'Transfer not authorized');
     });
 
-    it('should be able to request transfer of funds when from or to are graylisted', async function () {
+    it('should be able to request transfer of funds when from or to are greylisted', async function () {
       await this.roles.addDelegate(delegate0, {from: owner});
       await this.roles.addAuthority(this.tokenTransferRules.address, {from: owner});
       await this.assetRegistry.updateKYA(this.token.address, kyaHash, kyaUrl, {from: delegate0});
       await this.token.updateRestrictionsAndRules(this.tokenTransferRules.address, this.tokenTransferRules.address, {from: delegate0});
 
       await this.tokenTransferRules.whitelistAccount(owner, {from: owner});
-      await this.tokenTransferRules.grayListAccount(account0, {from: owner});
+      await this.tokenTransferRules.greyListAccount(account0, {from: owner});
 
       ({logs: this.logs} = await this.token.transfer(account0, value, {from: owner}));
       expectEvent.inLogs(this.logs, 'Transfer', {
@@ -538,14 +538,14 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
 
     });
 
-    it('should be able to execute transfer request when from or to are graylisted', async function () {
+    it('should be able to execute transfer request when from or to are greylisted', async function () {
       await this.roles.addDelegate(delegate0, {from: owner});
       await this.roles.addAuthority(this.tokenTransferRules.address, {from: owner});
       await this.assetRegistry.updateKYA(this.token.address, kyaHash, kyaUrl, {from: delegate0});
       await this.token.updateRestrictionsAndRules(this.tokenTransferRules.address, this.tokenTransferRules.address, {from: delegate0});
 
       await this.tokenTransferRules.whitelistAccount(owner, {from: owner});
-      await this.tokenTransferRules.grayListAccount(account0, {from: owner});
+      await this.tokenTransferRules.greyListAccount(account0, {from: owner});
 
       await this.token.transfer(account0, value, {from: owner});
 
@@ -568,7 +568,7 @@ contract('SRC20', async function ([_, manager, owner, authority0, authority1, ac
       await this.token.updateRestrictionsAndRules(this.tokenTransferRules.address, this.tokenTransferRules.address, {from: delegate0});
 
       await this.tokenTransferRules.whitelistAccount(owner, {from: owner});
-      await this.tokenTransferRules.grayListAccount(account0, {from: owner});
+      await this.tokenTransferRules.greyListAccount(account0, {from: owner});
 
       await this.token.transfer(account0, value, {from: owner});
       const reqNumber = await this.tokenTransferRules._reqNumber();

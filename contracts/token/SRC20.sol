@@ -5,7 +5,6 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
 import "./SRC20Detailed.sol";
 import "../interfaces/ISRC20.sol";
-import "../interfaces/ISRC20Owned.sol";
 import "../interfaces/ISRC20Managed.sol";
 import "../interfaces/ITransferRules.sol";
 import "../interfaces/IFeatured.sol";
@@ -19,7 +18,7 @@ import "../interfaces/IAssetRegistry.sol";
  * @title SRC20 contract
  * @dev Base SRC20 contract.
  */
-contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
+contract SRC20 is ISRC20, ISRC20Managed, SRC20Detailed, Ownable {
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
@@ -114,11 +113,9 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
     }
 
     /**
-     * @dev Update KYA document, sending document hash and url. Hash is
-     * SHA256 hash of document content.
-     * Emits KYAUpdated event.
-     * Allowed to be called by owner or delete accounts.
-     *
+     * Update the rules and restrictions settings for transfers.
+     * Only a Delegate can call this role
+     * 
      * @param restrictions address implementing on-chain restriction checks
      * or address(0) if no rules should be checked on chain.
      * @param rules address implementing on-chain restriction checks
@@ -481,7 +478,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
         require(account != address(0), 'minting to zero address');
 
         _totalSupply = _totalSupply.add(value);
-        require(_totalSupply <= _maxTotalSupply, 'trying to mint too many tokens!');
+        require(_maxTotalSupply == 0 || _totalSupply <= _maxTotalSupply, 'trying to mint too many tokens!');
 
         _balances[account] = _balances[account].add(value);
 

@@ -39,7 +39,7 @@ contract SRC20Factory is Ownable {
         uint256 maxTotalSupply,
         bytes32 kyaHash,
         string memory kyaUrl,
-        uint256 bookValueUSD,
+        uint256 netAssetValueUSD,
         address[] memory addressList
                      //  addressList[0] tokenOwner,
                      //  addressList[1] restrictions,
@@ -66,7 +66,7 @@ contract SRC20Factory is Ownable {
             addressList[6]  // minter
         );
 
-        IAssetRegistry(addressList[5]).addAsset(token, kyaHash, kyaUrl, bookValueUSD);
+        IAssetRegistry(addressList[5]).addAsset(token, kyaHash, kyaUrl, netAssetValueUSD);
 
         emit SRC20Created(token);
 

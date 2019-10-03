@@ -14,7 +14,7 @@ contract AssetRegistry is IAssetRegistry, Ownable {
     struct AssetType {
         bytes32 kyaHash;
         string kyaUrl;
-        uint256 bookValueUSD;
+        uint256 netAssetValueUSD;
     }
 
     address public _src20Factory;
@@ -44,41 +44,41 @@ contract AssetRegistry is IAssetRegistry, Ownable {
      *               or address(0) if no rules should be checked on chain.
      * @return True on success.
      */
-    function addAsset(address src20, bytes32 kyaHash, string calldata kyaUrl, uint256 bookValueUSD)
+    function addAsset(address src20, bytes32 kyaHash, string calldata kyaUrl, uint256 netAssetValueUSD)
         external
         onlyFactory
         returns (bool)
     {
-        require(assetList[src20].bookValueUSD == 0, 'Asset already added, try update functions');
+        require(assetList[src20].netAssetValueUSD == 0, 'Asset already added, try update functions');
 
         assetList[src20].kyaHash = kyaHash;
         assetList[src20].kyaUrl = kyaUrl;
-        assetList[src20].bookValueUSD = bookValueUSD;
+        assetList[src20].netAssetValueUSD = netAssetValueUSD;
 
-        emit AssetAdded(src20, kyaHash, kyaUrl, bookValueUSD);
+        emit AssetAdded(src20, kyaHash, kyaUrl, netAssetValueUSD);
         return true;
     }
 
     /**
-     * Gets the currently valid book value for a token.
+     * Gets the currently valid Net Asset Value value for a token.
      *
      * @param src20 the token address.
-     * @return The current book value of the token.
+     * @return The current Net Asset Value of the token.
      */
-    function getBookValueUSD(address src20) external view returns (uint256) {
-        return assetList[src20].bookValueUSD;
+    function getNetAssetValueUSD(address src20) external view returns (uint256) {
+        return assetList[src20].netAssetValueUSD;
     }
 
     /**
-     * Sets the currently valid book value for a token.
+     * Sets the currently valid Net Asset Value value for a token.
      *
      * @param src20 the token address.
-     * @param bookValueUSD the new value we're setting 
+     * @param netAssetValueUSD the new value we're setting 
      * @return True on success.
      */
-    function updateBookValueUSD(address src20, uint256 bookValueUSD) external onlyDelegate(src20) returns (bool) {
-        assetList[src20].bookValueUSD = bookValueUSD;
-        emit AssetBookValueUSDUpdated(src20, bookValueUSD);
+    function updateNetAssetValueUSD(address src20, uint256 netAssetValueUSD) external onlyDelegate(src20) returns (bool) {
+        assetList[src20].netAssetValueUSD = netAssetValueUSD;
+        emit AssetNVAUSDUpdated(src20, netAssetValueUSD);
         return true;
     }
 

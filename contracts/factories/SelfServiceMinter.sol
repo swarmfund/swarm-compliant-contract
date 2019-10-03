@@ -2,7 +2,7 @@ pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "../interfaces/IManager.sol";
-import "../interfaces/IBookValueUSD.sol";
+import "../interfaces/INetAssetValueUSD.sol";
 import "../interfaces/IPriceUSD.sol";
 
 /**
@@ -11,12 +11,12 @@ import "../interfaces/IPriceUSD.sol";
  */
 contract SelfServiceMinter {
     IManager public _registry;
-    IBookValueUSD public _asset;
+    INetAssetValueUSD public _asset;
     IPriceUSD public _SWMPriceOracle;
 
     constructor(address registry, address asset, address SWMRate) public {
         _registry = IManager(registry);
-        _asset = IBookValueUSD(asset);
+        _asset = INetAssetValueUSD(asset);
         _SWMPriceOracle = IPriceUSD(SWMRate);
     }
 
@@ -27,52 +27,47 @@ contract SelfServiceMinter {
 
     /**
      *  Calculate how many SWM tokens need to be staked to tokenize an asset
-     *  This function is custom for each Self Service Manager contract
-     *  Specification: https://docs.google.com/document/d/1Z-XuTxGf5LQudO5QLmnSnD-k3nTb0tlu3QViHbOSQXo/edit
+     *  This function is custom for each Self Service Minter contract
+     *  Specification: https://docs.google.com/document/d/1Z-XuTxGf5LQudO5QLmnSnD-k3nTb0tlu3QViHbOSQXo/
      *
      *  Note: The stake requirement depends only on the asset USD value and USD/SWM exchange rate (SWM price).
      *        It doesn't depend on the number of tokens to be minted!
      *
-     *  Note: Dollar values are rounded down to the nearest full dollar
-     *
-     *  @dev We convert to cents and back to dollars because Solidity doesn't have decimal point support yet
-     *
-     *  @param tokenizedAssetValueUSD Tokenized Asset Value in USD
+     *  @param netAssetValueUSD Tokenized Asset Value in USD
      *  @return the number of SWM tokens
      */
-    function calcStake(uint256 tokenizedAssetValueUSD) public view returns (uint256) {
+    function calcStake(uint256 netAssetValueUSD) public view returns (uint256) {
 
-        uint256 TAV = tokenizedAssetValueUSD; /// TAV = Tokenized Asset Value in USD
+        uint256 NAV = netAssetValueUSD; /// Value in USD
 
-        uint256 SWMPrice = _SWMPriceOracle.getPrice(); /// Price is in cents! GUI needs to know this
-
+        uint256 SWMPriceUSD = _SWMPriceOracle.getPrice(); /// Price is in cents! GUI needs to know this
         uint256 stakeUSD;
 
-        if(TAV > 0 && TAV <= 1000000)
-            stakeUSD = 2500 + (TAV - 0) * 0;
+        if(NAV > 0 && NAV <= 500000) // Up to 500,000 NAV the stake is flat at 2,500 USD
+            stakeUSD = 2500;
 
-        if(TAV > 1000000 && TAV <= 5000000)
-            stakeUSD = 5000 + (TAV - 1000000) * 5 / 1000;
+        if(NAV > 500000 && NAV <= 1000000) // From 500K up to 1M stake is 0.5%
+            stakeUSD = NAV * 5 / 1000;
 
-        if(TAV > 5000000 && TAV <= 15000000)
-            stakeUSD = 22500 + (TAV - 5000000) * 4375 / 1000000;
+        if(NAV > 1000000 && NAV <= 5000000) // From 1M up to 5M stake is 0.45%
+            stakeUSD = NAV * 45 / 10000;
 
-        if(TAV > 15000000 && TAV <= 50000000)
-            stakeUSD = 60000 + (TAV - 15000000) * 375 / 100000;
+        if(NAV > 5000000 && NAV <= 15000000) // From 5M up to 15M stake is 0.40%
+            stakeUSD = NAV * 4 / 1000;
 
-        if(TAV > 50000000 && TAV <= 100000000)
-            stakeUSD = 125000 + (TAV - 50000000) * 1857 / 1000000;
+        if(NAV > 15000000 && NAV <= 50000000) // From 15M up to 50M stake is 0.25%
+            stakeUSD = NAV * 25 / 10000;
 
-        if(TAV > 100000000 && TAV <= 150000000)
-            stakeUSD = 200000 + (TAV - 100000000) * 15 / 10000;
+        if(NAV > 50000000 && NAV <= 100000000) // From 50M up to 100M stake is 0.20%
+            stakeUSD = NAV * 2 / 1000;
 
-        if(TAV > 150000000 && TAV <= 250000000)
-            stakeUSD = 225000 + (TAV - 150000000) * 5 / 10000;
+        if(NAV > 100000000 && NAV <= 150000000) // From 100M up to 150M stake is 0.15%
+            stakeUSD = NAV * 15 / 10000;
 
-        if(TAV > 250000000)
-            stakeUSD = 250000 + (TAV - 250000000) * 25 / 100000;
+        if(NAV > 150000000) // From 150M up stake is 0.10%
+            stakeUSD = NAV * 1 / 1000;
 
-        return ((stakeUSD * 100) * SWMPrice) / 100; /// Divide to get from cents to dollars
+        return (stakeUSD / SWMPriceUSD);
 
     } /// fn calcStake
 
@@ -93,7 +88,7 @@ contract SelfServiceMinter {
         onlyTokenOwner(src20)
         returns (bool)
     {
-        uint256 numSWMTokens = calcStake(_asset.getBookValueUSD(src20));
+        uint256 numSWMTokens = calcStake(_asset.getNetAssetValueUSD(src20));
 
         require(_registry.mintSupply(src20, msg.sender, numSWMTokens, numSRC20Tokens), 'supply minting failed');
 

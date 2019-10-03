@@ -2,7 +2,7 @@ pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "../interfaces/IManager.sol";
-import "../interfaces/IBookValueUSD.sol";
+import "../interfaces/INetAssetValueUSD.sol";
 
 /**
  * @title SwarmMinter
