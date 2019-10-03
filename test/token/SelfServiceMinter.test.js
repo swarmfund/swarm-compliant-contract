@@ -21,7 +21,8 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
   const SRC20_DECIMALS = new BN(8); // test with decimals diff
   const SWM_DECIMALS = new BN(18);
   const maxSrcTotalSupply = new BN(10000000000).mul(new BN(10).pow(SRC20_DECIMALS));
-  const SWM_PRICE = 10;
+  const SWM_PRICE_USD_NUMERATOR = 5
+  const SWM_PRICE_USD_DENOMINATOR = 100
   const NAV = 1000;
 
   beforeEach(async function () {
@@ -30,7 +31,7 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
     this.factory = await SRC20Factory.new(this.registry.address, {from: owner});
     await this.registry.addFactory(this.factory.address, {from: owner});
 
-    this.sWMPriceOracle = await SWMPriceOracle.new(SWM_PRICE, {from: owner});
+    this.sWMPriceOracle = await SWMPriceOracle.new(SWM_PRICE_USD_NUMERATOR, SWM_PRICE_USD_DENOMINATOR, {from: owner});
     this.assetRegistry = await AssetRegistry.new(this.factory.address, {from: owner});
 
     this.SelfServiceMinter = await SelfServiceMinter.new(this.registry.address, this.assetRegistry.address, this.sWMPriceOracle.address, {from: owner});
@@ -87,25 +88,34 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
 
     it('should return correct stake for various inputs', async function () {
 
-      const SWMPRICE = new BN(SWM_PRICE);
+      const SWMPRICENUMERATOR = new BN(SWM_PRICE_USD_NUMERATOR);
+      const SWMPRICEDENOMINATOR = new BN(SWM_PRICE_USD_DENOMINATOR);
 
-      var NAV   = 100;
-      var FLOOR = 0;
-      var BASE  = 2500;
-      var FRAC  = 0;
-      var expected = new BN( BASE + (NAV - FLOOR) * FRAC ).mul(SWMPRICE);
-      var result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
+
+      let NAV   = new BN(250000);
+      let expected = new BN(2500*100/5);
+      let result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
                   ', Expected: ' + expected.toLocaleString());
       await assert.equal((result).eq(expected), true);
 
 
-      NAV   = 1500000;
-      FLOOR = 1000000;
-      BASE  = 5000;
-      FRAC  = 5/1000;
-      expected = new BN( BASE + (NAV - FLOOR) * FRAC ).mul(SWMPRICE);
+          NAV   = new BN(750000);
+      let fnum  = new BN(5)
+      let fden  = new BN(1000);
+          expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
+          result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
+      console.log('      For NAV: ' + NAV.toLocaleString() +
+                  ', Result: ' + result.toLocaleString() +
+                  ', Expected: ' + expected.toLocaleString());
+      await assert.equal((result).eq(expected), true);
+
+
+      NAV   = new BN(1500000);
+      fnum  = new BN(45)
+      fden  = new BN(10000);
+      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
       result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
@@ -113,11 +123,10 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
       await assert.equal((result).eq(expected), true);
 
 
-      NAV   = 7000000;
-      FLOOR = 5000000;
-      BASE  = 22500;
-      FRAC  = 4375/1000000;
-      expected = new BN( BASE + (NAV - FLOOR) * FRAC ).mul(SWMPRICE);
+      NAV   = new BN(7300000);
+      fnum  = new BN(4)
+      fden  = new BN(1000);
+      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
       result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
@@ -125,11 +134,10 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
       await assert.equal((result).eq(expected), true);
 
 
-      NAV   = 35000000;
-      FLOOR = 15000000;
-      BASE  = 60000;
-      FRAC  = 375/100000;
-      expected = new BN( BASE + (NAV - FLOOR) * FRAC ).mul(SWMPRICE);
+      NAV   = new BN(23000000);
+      fnum  = new BN(25)
+      fden  = new BN(10000);
+      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
       result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
@@ -137,11 +145,21 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
       await assert.equal((result).eq(expected), true);
 
 
-      NAV   = 75000000;
-      FLOOR = 50000000;
-      BASE  = 125000;
-      FRAC  = 1857/1000000;
-      expected = new BN( BASE + (NAV - FLOOR) * FRAC ).mul(SWMPRICE);
+      NAV   = new BN(88500000);
+      fnum  = new BN(2)
+      fden  = new BN(1000);
+      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
+      result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
+      console.log('      For NAV: ' + NAV.toLocaleString() +
+                  ', Result: ' + result.toLocaleString() +
+                  ', Expected: ' + expected.toLocaleString());
+      await assert.equal((result).eq(expected), true);
+
+      
+      NAV   = new BN(143700000);
+      fnum  = new BN(15)
+      fden  = new BN(10000);
+      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
       result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
@@ -149,35 +167,10 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
       await assert.equal((result).eq(expected), true);
 
 
-      NAV   = 135000000;
-      FLOOR = 100000000;
-      BASE  = 200000;
-      FRAC  = 15/10000;
-      expected = new BN( BASE + (NAV - FLOOR) * FRAC ).mul(SWMPRICE);
-      result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
-      console.log('      For NAV: ' + NAV.toLocaleString() +
-                  ', Result: ' + result.toLocaleString() +
-                  ', Expected: ' + expected.toLocaleString());
-      await assert.equal((result).eq(expected), true);
-
-
-      NAV   = 200000000;
-      FLOOR = 150000000;
-      BASE  = 225000;
-      FRAC  = 5/10000;
-      expected = new BN( BASE + (NAV - FLOOR) * FRAC ).mul(SWMPRICE);
-      result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
-      console.log('      For NAV: ' + NAV.toLocaleString() +
-                  ', Result: ' + result.toLocaleString() +
-                  ', Expected: ' + expected.toLocaleString());
-      await assert.equal((result).eq(expected), true);
-
-
-      NAV   = 350000000;
-      FLOOR = 250000000;
-      BASE  = 250000;
-      FRAC  = 25/100000;
-      expected = new BN( BASE + (NAV - FLOOR) * FRAC ).mul(SWMPRICE);
+      NAV   = new BN(239000000);
+      fnum  = new BN(1)
+      fden  = new BN(1000);
+      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
       result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
