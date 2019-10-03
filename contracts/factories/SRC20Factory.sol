@@ -6,7 +6,7 @@ import "../interfaces/ISRC20Registry.sol";
 import "../interfaces/IAssetRegistry.sol";
 
 /**
- * @dev Factory that creates SRC20 token for requested token
+ * @dev Factory that creates SRC20 token with requested token
  * properties and features.
  */
 contract SRC20Factory is Ownable {
@@ -16,7 +16,7 @@ contract SRC20Factory is Ownable {
 
     /**
      * @dev Factory constructor expects SRC20 tokens registry.
-     * Every created token will be registered in registry.
+     * Each created token will be registered in registry.
      * @param registry address of SRC20Registry contract.
      */
     constructor(address registry) public {
