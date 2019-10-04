@@ -1,6 +1,5 @@
 pragma solidity ^0.5.0;
 
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "../token/SRC20.sol";
 import "../interfaces/ISRC20Registry.sol";
 import "../interfaces/IAssetRegistry.sol";
@@ -9,7 +8,7 @@ import "../interfaces/IAssetRegistry.sol";
  * @dev Factory that creates SRC20 token with requested token
  * properties and features.
  */
-contract SRC20Factory is Ownable {
+contract SRC20Factory {
     ISRC20Registry private _registry;
 
     event SRC20Created(address token);
@@ -49,7 +48,7 @@ contract SRC20Factory is Ownable {
                      //  addressList[5] asset,
                      //  addressList[6] minter
     )
-        public onlyOwner returns (bool) 
+        public returns (bool)
     {
         address token = address(new SRC20(
             name,
