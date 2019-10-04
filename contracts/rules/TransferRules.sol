@@ -12,10 +12,9 @@ import "../interfaces/ITransferRestrictions.sol";
  * It implements whitelist and grey list.
  */
 contract TransferRules is ITransferRules, ManualApproval, Whitelisted {
-    address private _src20;
 
     modifier onlySRC20 {
-        require(msg.sender == _src20);
+        require(msg.sender == address(_src20));
         _;
     }
 
@@ -29,9 +28,8 @@ contract TransferRules is ITransferRules, ManualApproval, Whitelisted {
     * @param src20 - Address of SRC20 contract.
     */
     function setSRC(address src20) external returns (bool) {
-        require(_src20 == address(0), "SRC20 already set");
-        _src20 = src20;
-        _setSRC20ManualAllover(_src20);
+        require(address(_src20) == address(0), "SRC20 already set");
+        _src20 = ISRC20(src20);
         return true;
     }
 

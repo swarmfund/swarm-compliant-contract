@@ -23,6 +23,9 @@ contract SWMPriceOracle is IPriceUSD, Ownable {
 
     constructor(uint256 priceNumerator, uint256 priceDenominator) 
     public {
+        require(priceNumerator > 0, "numerator must not be zero");
+        require(priceDenominator > 0, "denominator must not be zero");
+
         _priceNumerator = priceNumerator;
         _priceDenominator = priceDenominator;
 
@@ -50,7 +53,9 @@ contract SWMPriceOracle is IPriceUSD, Ownable {
      *  @return true on success
      */
     function updatePrice(uint256 priceNumerator, uint256 priceDenominator) external onlyOwner returns (bool) {
-        
+        require(priceNumerator > 0, "numerator must not be zero");
+        require(priceDenominator > 0, "denominator must not be zero");
+
         emit UpdatedSWMPriceUSD(_priceNumerator, _priceDenominator, priceNumerator, priceDenominator);
 
         _priceNumerator = priceNumerator;

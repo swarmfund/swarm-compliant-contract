@@ -46,11 +46,6 @@ contract ManualApproval is Ownable {
     constructor () public {
     }
 
-    function _setSRC20ManualAllover(address src20) internal returns (bool) {
-        _src20 = ISRC20(src20);
-        return true;
-    }
-
     /**
      * @dev Owner of this contract have authority to approve tx which are valid.
      *
