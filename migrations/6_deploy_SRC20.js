@@ -4,7 +4,7 @@ const SRC20Roles = artifacts.require('SRC20Roles');
 const TransferRules = artifacts.require('TransferRules');
 const SRC20Factory = artifacts.require("SRC20Factory");
 const AssetRegistry = artifacts.require('AssetRegistry');
-const SelfServiceMinter = artifacts.require('SelfServiceMinter');
+const GetRateMinter = artifacts.require('GetRateMinter');
 
 const {
     SRC20_FEATURES,
@@ -35,7 +35,7 @@ module.exports = async function (deployer, network) {
                     TOKEN_OWNER
                 ).then(async function (rules) {
                     return AssetRegistry.deployed().then(async assetRegistry => {
-                        return SelfServiceMinter.deployed().then(async selfServiceMinter => {
+                        return GetRateMinter.deployed().then(async getRateMinter => {
                             return SRC20Factory.deployed().then(async SRC20Factory => {
                                 const tx = await SRC20Factory.create(
                                     NAME,
@@ -52,7 +52,7 @@ module.exports = async function (deployer, network) {
                                         roles.address,
                                         featured.address,
                                         assetRegistry.address,
-                                        selfServiceMinter.address
+                                        getRateMinter.address
                                     ],
                                 );
 
@@ -79,7 +79,7 @@ module.exports = async function (deployer, network) {
                     TOKEN_OWNER
                 ).then(async function (rules) {
                     return AssetRegistry.deployed().then(async assetRegistry => {
-                        return SelfServiceMinter.deployed().then(async selfServiceMinter => {
+                        return GetRateMinter.deployed().then(async getRateMinter => {
                             return SRC20Factory.deployed().then(async SRC20Factory => {
                                 const tx = await SRC20Factory.create(
                                     NAME,
@@ -96,11 +96,11 @@ module.exports = async function (deployer, network) {
                                         roles.address,
                                         featured.address,
                                         assetRegistry.address,
-                                        selfServiceMinter.address
+                                        getRateMinter.address
                                     ],
                                 );
 
-                                const src20Address = tx.logs[2].args.token;
+                                const src20Address = tx.logs[0].args.token;
                                 console.log('SRC20 contract address: ', src20Address);
                             });
                         });

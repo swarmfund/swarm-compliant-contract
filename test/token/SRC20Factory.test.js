@@ -9,7 +9,7 @@ const SwarmTokenMock = artifacts.require('SwarmTokenMock');
 const SRC20Roles = artifacts.require('SRC20Roles');
 const Featured = artifacts.require('FeaturedMock');
 const AssetRegistry = artifacts.require('AssetRegistry');
-const SwarmMinter = artifacts.require('SwarmMinter');
+const SetRateMinter = artifacts.require('SetRateMinter');
 
 contract('SRC20Factory', function ([_, owner, account0, account1, account2, account3]) {
   const kyaHash = crypto.createHash('sha256').update(constants.ZERO_ADDRESS).digest();
@@ -31,8 +31,8 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2, acco
 
     this.assetRegistry = await AssetRegistry.new(this.factory.address, {from: owner});
 
-    this.swarmMinter = await SwarmMinter.new(this.registry.address, {from: owner});
-    this.registry.addMinter(this.swarmMinter.address, {from: owner});
+    this.setRateMinter = await SetRateMinter.new(this.registry.address, {from: owner});
+    this.registry.addMinter(this.setRateMinter.address, {from: owner});
 
     this.roles = await SRC20Roles.new(owner, this.registry.address, {from: owner});
     this.feature = await Featured.new(owner, features, {from: owner});
@@ -52,7 +52,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2, acco
           this.roles.address,
           this.feature.address,
           this.assetRegistry.address,
-          this.swarmMinter.address
+          this.setRateMinter.address
         ],
       {from: owner}
     );
@@ -121,7 +121,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2, acco
     it('should not allow any management operations for unregistered SRC20 token', async function () {
       const value = new BN(100);
 
-      await shouldFail.reverting.withMessage(this.swarmMinter.mintSupply(this.unregisteredToken.address, account0, value, value, {from: owner}),
+      await shouldFail.reverting.withMessage(this.setRateMinter.mintSupply(this.unregisteredToken.address, account0, value, value, {from: owner}),
         'Caller not token minter.');
 
       await shouldFail.reverting.withMessage(this.registry.renounceManagement(this.unregisteredToken.address, {from: owner}),
@@ -152,7 +152,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2, acco
       const startingStake = await this.registry.getStake(this.token.address);
 
       await this.swarmTokenMock.approve(this.registry.address, weiSWMValue, {from: account0});
-      await this.swarmMinter.mintSupply(this.token.address, account0, weiSWMValue, weiSRC20Value, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSWMValue, weiSRC20Value, {from: owner});
 
       const erc20balance = await this.swarmTokenMock.balanceOf(account0);
       assert.equal((startingErc20balance.sub(weiSWMValue)).eq(erc20balance), true);
@@ -174,7 +174,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2, acco
       const weiSRC20Value = src20Value.mul(new BN(10).pow(SRC20_DECIMALS));
 
       await this.swarmTokenMock.approve(this.registry.address, weiSWMValue, {from: account0});
-      await this.swarmMinter.mintSupply(this.token.address, account0, weiSWMValue, weiSRC20Value, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSWMValue, weiSRC20Value, {from: owner});
 
       const startingErc20balance = await this.swarmTokenMock.balanceOf(account0);
       const startingErc20contractBalance = await this.swarmTokenMock.balanceOf(this.registry.address);
@@ -209,7 +209,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2, acco
       const weiSwmValueStake = new BN(50).mul(new BN(10).pow(SWM_DECIMALS));
 
       await this.swarmTokenMock.approve(this.registry.address, weiSwmValue, {from: account0});
-      await this.swarmMinter.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
 
       const startingSwmBalance = await this.swarmTokenMock.balanceOf(account0);
       const startingSwmContractBalance = await this.swarmTokenMock.balanceOf(this.registry.address);
@@ -242,7 +242,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2, acco
       const weiSwmValueStake = new BN(50).mul(new BN(10).pow(SWM_DECIMALS));
 
       await this.swarmTokenMock.approve(this.registry.address, weiSwmValue, {from: account0});
-      await this.swarmMinter.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
 
       await this.swarmTokenMock.approve(this.registry.address, weiSwmValueStake, {from: account0});
       await this.registry.incStake(this.token.address, account0, weiSwmValueStake, {from: account0});
@@ -283,10 +283,10 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2, acco
       const weiSwmValueStake = new BN(50).mul(new BN(10).pow(SWM_DECIMALS));
 
       await this.swarmTokenMock.approve(this.registry.address, weiSwmValue, {from: account0});
-      await this.swarmMinter.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
 
       await this.swarmTokenMock.approve(this.registry.address, weiSwmValue, {from: account0});
-      await this.swarmMinter.mintSupply(this.token.address, account0, weiSwmValue, newWeiSrcValue, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSwmValue, newWeiSrcValue, {from: owner});
 
       const startingSwmBalance = await this.swarmTokenMock.balanceOf(account0);
       const startingSwmContractBalance = await this.swarmTokenMock.balanceOf(this.registry.address);
@@ -323,10 +323,10 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2, acco
       const newWeiSrcValue = weiSrcValue.mul(two);
 
       await this.swarmTokenMock.approve(this.registry.address, weiSwmValue, {from: account0});
-      await this.swarmMinter.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
 
       await this.swarmTokenMock.approve(this.registry.address, weiSwmValue, {from: account0});
-      await this.swarmMinter.mintSupply(this.token.address, account0, weiSwmValue, newWeiSrcValue, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSwmValue, newWeiSrcValue, {from: owner});
 
       const startingSwmBalance = await this.swarmTokenMock.balanceOf(account0);
       const startingSwmContractBalance = await this.swarmTokenMock.balanceOf(this.registry.address);
@@ -366,7 +366,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2, acco
     it('should not allow any management operations for unregistered SRC20 token', async function () {
       const value = new BN(100);
 
-      await shouldFail.reverting.withMessage(this.swarmMinter.mintSupply(this.unregisteredToken.address, account0, value, value, {from: owner}),
+      await shouldFail.reverting.withMessage(this.setRateMinter.mintSupply(this.unregisteredToken.address, account0, value, value, {from: owner}),
         'Caller not token minter.');
 
       await shouldFail.reverting.withMessage(this.registry.renounceManagement(this.unregisteredToken.address, {from: owner}),

@@ -6,10 +6,10 @@ import "../interfaces/INetAssetValueUSD.sol";
 import "../interfaces/IPriceUSD.sol";
 
 /**
- * @title SelfServiceMinter
+ * @title GetRateMinter
  * @dev Serves as proxy (manager) for SRC20 minting/burning.
  */
-contract SelfServiceMinter {
+contract GetRateMinter {
     IManager public _registry;
     INetAssetValueUSD public _asset;
     IPriceUSD public _SWMPriceOracle;

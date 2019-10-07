@@ -9,10 +9,10 @@ const SwarmTokenMock = artifacts.require('SwarmTokenMock');
 const SRC20Roles = artifacts.require('SRC20Roles');
 const Featured = artifacts.require('FeaturedMock');
 const AssetRegistry = artifacts.require('AssetRegistry');
-const SelfServiceMinter = artifacts.require('SelfServiceMinter');
+const GetRateMinter = artifacts.require('GetRateMinter');
 const SWMPriceOracle = artifacts.require('SWMPriceOracle');
 
-contract('SelfServiceMinter', function ([_, owner, account0, account1, account2, account3]) {
+contract('GetRateMinter', function ([_, owner, account0, account1, account2, account3]) {
   const kyaHash = crypto.createHash('sha256').update(constants.ZERO_ADDRESS).digest();
   const kyaUrl = 'https://www.mvpworkshop.co';
   const swmTotalSupply = new BN(1000000).mul(new BN(10).pow(new BN(36)));
@@ -34,8 +34,8 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
     this.sWMPriceOracle = await SWMPriceOracle.new(SWM_PRICE_USD_NUMERATOR, SWM_PRICE_USD_DENOMINATOR, {from: owner});
     this.assetRegistry = await AssetRegistry.new(this.factory.address, {from: owner});
 
-    this.SelfServiceMinter = await SelfServiceMinter.new(this.registry.address, this.assetRegistry.address, this.sWMPriceOracle.address, {from: owner});
-    this.registry.addMinter(this.SelfServiceMinter.address, {from: owner});
+    this.GetRateMinter = await GetRateMinter.new(this.registry.address, this.assetRegistry.address, this.sWMPriceOracle.address, {from: owner});
+    this.registry.addMinter(this.GetRateMinter.address, {from: owner});
 
     this.roles = await SRC20Roles.new(owner, this.registry.address, {from: owner});
     this.feature = await Featured.new(owner, features, {from: owner});
@@ -55,7 +55,7 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
           this.roles.address,
           this.feature.address,
           this.assetRegistry.address,
-          this.SelfServiceMinter.address
+          this.GetRateMinter.address
         ],
       {from: owner}
     );
@@ -93,8 +93,8 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
 
 
       let NAV   = new BN(250000);
-      let expected = new BN(2500*100/5);
-      let result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
+      let expected = new BN(2500*100/5).mul((new BN(10)).pow(new BN(18)));
+      let result = await this.GetRateMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
                   ', Expected: ' + expected.toLocaleString());
@@ -104,8 +104,8 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
           NAV   = new BN(750000);
       let fnum  = new BN(5)
       let fden  = new BN(1000);
-          expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
-          result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
+          expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR).mul((new BN(10)).pow(new BN(18)));
+          result = await this.GetRateMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
                   ', Expected: ' + expected.toLocaleString());
@@ -115,8 +115,8 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
       NAV   = new BN(1500000);
       fnum  = new BN(45)
       fden  = new BN(10000);
-      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
-      result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
+      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR).mul((new BN(10)).pow(new BN(18)));
+      result = await this.GetRateMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
                   ', Expected: ' + expected.toLocaleString());
@@ -126,8 +126,8 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
       NAV   = new BN(7300000);
       fnum  = new BN(4)
       fden  = new BN(1000);
-      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
-      result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
+      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR).mul((new BN(10)).pow(new BN(18)));
+      result = await this.GetRateMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
                   ', Expected: ' + expected.toLocaleString());
@@ -137,8 +137,8 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
       NAV   = new BN(23000000);
       fnum  = new BN(25)
       fden  = new BN(10000);
-      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
-      result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
+      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR).mul((new BN(10)).pow(new BN(18)));
+      result = await this.GetRateMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
                   ', Expected: ' + expected.toLocaleString());
@@ -148,8 +148,8 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
       NAV   = new BN(88500000);
       fnum  = new BN(2)
       fden  = new BN(1000);
-      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
-      result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
+      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR).mul((new BN(10)).pow(new BN(18)));
+      result = await this.GetRateMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
                   ', Expected: ' + expected.toLocaleString());
@@ -159,8 +159,8 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
       NAV   = new BN(143700000);
       fnum  = new BN(15)
       fden  = new BN(10000);
-      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
-      result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
+      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR).mul((new BN(10)).pow(new BN(18)));
+      result = await this.GetRateMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
                   ', Expected: ' + expected.toLocaleString());
@@ -170,8 +170,19 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
       NAV   = new BN(239000000);
       fnum  = new BN(1)
       fden  = new BN(1000);
-      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR);
-      result = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
+      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR).mul((new BN(10)).pow(new BN(18)));
+      result = await this.GetRateMinter.calcStake(NAV, {from: account1});
+      console.log('      For NAV: ' + NAV.toLocaleString() +
+                  ', Result: ' + result.toLocaleString() +
+                  ', Expected: ' + expected.toLocaleString());
+      await assert.equal((result).eq(expected), true);
+
+
+      NAV   = new BN(1000000000);
+      fnum  = new BN(1)
+      fden  = new BN(1000);
+      expected = NAV.mul(fnum).div(fden).mul(SWMPRICEDENOMINATOR).div(SWMPRICENUMERATOR).mul((new BN(10)).pow(new BN(18)));
+      result = await this.GetRateMinter.calcStake(NAV, {from: account1});
       console.log('      For NAV: ' + NAV.toLocaleString() +
                   ', Result: ' + result.toLocaleString() +
                   ', Expected: ' + expected.toLocaleString());
@@ -186,7 +197,7 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
     it('should not allow staking and minting to be initiated by anyone but the SRC20 Token owner', async function () {
       const value = new BN(100);
 
-      await shouldFail.reverting.withMessage(this.SelfServiceMinter.stakeAndMint(this.token.address, value, {from: account1}),
+      await shouldFail.reverting.withMessage(this.GetRateMinter.stakeAndMint(this.token.address, value, {from: account1}),
         'caller not token owner.');
 
     });
@@ -202,9 +213,9 @@ contract('SelfServiceMinter', function ([_, owner, account0, account1, account2,
       const startingSrc20balance = await this.token.balanceOf(account0);
       const startingStake = await this.registry.getStake(this.token.address);
 
-      const calcResult = await this.SelfServiceMinter.calcStake(NAV, {from: account1});
+      const calcResult = await this.GetRateMinter.calcStake(NAV, {from: account1});
       await this.swarmTokenMock.approve(this.registry.address, calcResult, {from: account0});
-      await this.SelfServiceMinter.stakeAndMint(this.token.address, weiSRC20Value, {from: account0});
+      await this.GetRateMinter.stakeAndMint(this.token.address, weiSRC20Value, {from: account0});
 
       // That the SWM tokens have been sutracted from the staking account
       const erc20balance = await this.swarmTokenMock.balanceOf(account0);

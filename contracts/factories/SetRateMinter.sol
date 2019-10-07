@@ -5,10 +5,10 @@ import "../interfaces/IManager.sol";
 import "../interfaces/INetAssetValueUSD.sol";
 
 /**
- * @title SwarmMinter
+ * @title SetRateMinter
  * @dev Serves as proxy (manager) for SRC20 minting/burning.
  */
-contract SwarmMinter is Ownable {
+contract SetRateMinter is Ownable {
     IManager public _registry;
 
     constructor(address registry) public {
