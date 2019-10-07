@@ -67,7 +67,7 @@ contract SelfServiceMinter {
 
         (uint256 numerator, uint denominator) = _SWMPriceOracle.getPrice(); // 0.04 is returned as (4, 100)
 
-        return stakeUSD * denominator / numerator;
+        return (stakeUSD * denominator / numerator) * 10**18;
 
     } /// fn calcStake
 
