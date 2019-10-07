@@ -56,7 +56,7 @@ module.exports = async function (deployer, network) {
                                     ],
                                 );
 
-                                const src20Address = tx.logs[2].args.token;
+                                const src20Address = tx.logs[0].args.token;
                                 console.log('SRC20 contract address: ', src20Address);
                             });
                         });
