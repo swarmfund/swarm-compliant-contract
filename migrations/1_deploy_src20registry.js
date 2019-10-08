@@ -5,7 +5,7 @@ const MockToken = artifacts.require("SwarmTokenMock");
 const {
   ERC20_SWM,
   DEVELOPMENT_SWM_TOKEN_OWNER,
-  DEVELOPMENT_SWM_TOTAL_SUPPLY
+  DEVELOPMENT_SWM_TOTAL_SUPPLY,
 } = process.env;
 
 module.exports = function (deployer, network) {

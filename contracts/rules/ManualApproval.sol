@@ -7,7 +7,7 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 /*
  * @title ManualApproval contract
  * @dev On-chain transfer rule that is handling transfer request/execution for
- * gray-listed account
+ * grey-listed account
  */
 contract ManualApproval is Ownable {
     struct TransferReq {
@@ -20,7 +20,7 @@ contract ManualApproval is Ownable {
     ISRC20 public _src20;
 
     mapping(uint256 => TransferReq) public _transferReq;
-    mapping(address => bool) public _grayList;
+    mapping(address => bool) public _greyList;
 
     event TransferRequest(
         uint256 indexed requestNumber,
@@ -44,11 +44,6 @@ contract ManualApproval is Ownable {
     );
 
     constructor () public {
-    }
-
-    function _setSRC20ManualAllover(address src20) internal returns (bool) {
-        _src20 = ISRC20(src20);
-        return true;
     }
 
     /**
@@ -83,18 +78,18 @@ contract ManualApproval is Ownable {
         return true;
     }
 
-    // Handling gray listing
-    function isGrayListed(address account) public view returns (bool){
-        return _grayList[account];
+    // Handling grey listing
+    function isGreyListed(address account) public view returns (bool){
+        return _greyList[account];
     }
 
-    function grayListAccount(address account) external onlyOwner returns (bool){
-        _grayList[account] = true;
+    function greyListAccount(address account) external onlyOwner returns (bool){
+        _greyList[account] = true;
         return true;
     }
 
-    function unGrayListAccount(address account) external onlyOwner returns (bool){
-        delete _grayList[account];
+    function unGreyListAccount(address account) external onlyOwner returns (bool){
+        delete _greyList[account];
         return true;
     }
 

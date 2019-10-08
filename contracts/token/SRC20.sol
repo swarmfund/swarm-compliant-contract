@@ -5,45 +5,41 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
 import "./SRC20Detailed.sol";
 import "../interfaces/ISRC20.sol";
-import "../interfaces/ISRC20Owned.sol";
 import "../interfaces/ISRC20Managed.sol";
 import "../interfaces/ITransferRules.sol";
 import "../interfaces/IFeatured.sol";
 import "../interfaces/ISRC20Roles.sol";
 import "../interfaces/ISRC20.sol";
 import "../interfaces/ITransferRestrictions.sol";
+import "../interfaces/IAssetRegistry.sol";
 
 
 /**
  * @title SRC20 contract
  * @dev Base SRC20 contract.
  */
-contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
+contract SRC20 is ISRC20, ISRC20Managed, SRC20Detailed, Ownable {
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
     mapping(address => uint256) public _balances;
     mapping(address => mapping(address => uint256)) public _allowances;
     uint256 public _totalSupply;
+    uint256 public _maxTotalSupply;
 
     mapping(address => uint256) private _nonce;
 
-    struct KYA {
-        bytes32 kyaHash;
-        string kyaUrl;
-    }
+    ISRC20Roles public _roles;
+    IFeatured public _features;
 
-    KYA private _kya;
-
-    ISRC20Roles private _roles;
-    IFeatured private _features;
+    IAssetRegistry public _assetRegistry;
 
     /**
      * @description Configured contract implementing token restriction(s).
      * If set, transferToken will consult this contract should transfer
      * be allowed after successful authorization signature check.
      */
-    ITransferRestrictions private _restrictions;
+    ITransferRestrictions public _restrictions;
 
     /**
      * @description Configured contract implementing token rule(s).
@@ -52,7 +48,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
      * And call doTransfer() in order for rules to decide where fund
      * should end up.
      */
-    ITransferRules private _rules;
+    ITransferRules public _rules;
 
     modifier onlyAuthority() {
         require(_roles.isAuthority(msg.sender), "Caller not authority");
@@ -76,26 +72,29 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
 
     // Constructors
     constructor(
-        address owner,
         string memory name,
         string memory symbol,
         uint8 decimals,
-        bytes32 kyaHash,
-        string memory kyaUrl,
-        address restrictions,
-        address rules,
-        address roles,
-        address features
+        uint256 maxTotalSupply,
+        address[] memory addressList
+                    //  addressList[0] tokenOwner,
+                    //  addressList[1] restrictions,
+                    //  addressList[2] rules,
+                    //  addressList[3] roles,
+                    //  addressList[4] featured,
+                    //  addressList[5] assetRegistry
     )
     SRC20Detailed(name, symbol, decimals)
     public
     {
-        _transferOwnership(owner);
+        _assetRegistry = IAssetRegistry(addressList[5]);
+        _transferOwnership(addressList[0]);
 
-        _updateKYA(kyaHash, kyaUrl, restrictions, rules);
+        _maxTotalSupply = maxTotalSupply;
+        _updateRestrictionsAndRules(addressList[1], addressList[2]);
 
-        _roles = ISRC20Roles(roles);
-        _features = IFeatured(features);
+        _roles = ISRC20Roles(addressList[3]);
+        _features = IFeatured(addressList[4]);
     }
 
     /**
@@ -111,46 +110,29 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
         return true;
     }
 
-    // KYA management
     /**
-     * @dev Update KYA document, sending document hash and url. Hash is
-     * SHA256 hash of document content.
-     * Emits KYAUpdated event.
-     * Allowed to be called by owner or delete accounts.
-     *
-     * @param kyaHash SHA256 hash of KYA document.
-     * @param kyaUrl URL of token's KYA document (ipfs, http, etc.).
+     * Update the rules and restrictions settings for transfers.
+     * Only a Delegate can call this role
+     * 
      * @param restrictions address implementing on-chain restriction checks
      * or address(0) if no rules should be checked on chain.
+     * @param rules address implementing on-chain restriction checks
      * @return True on success.
      */
-    function updateKYA(bytes32 kyaHash, string calldata kyaUrl, address restrictions, address rules) external onlyDelegate returns (bool) {
-        return _updateKYA(kyaHash, kyaUrl, restrictions, rules);
+    function updateRestrictionsAndRules(address restrictions, address rules) external onlyDelegate returns (bool) {
+        return _updateRestrictionsAndRules(restrictions, rules);
     }
 
     /**
-     * @dev Retrieve token's KYA document's hash and url.
+     * @dev Internal function to update the restrictions and rules contracts.
+     * Emits RestrictionsAndRulesUpdated event.
      *
-     * @return Hash of KYA document.
-     * @return URL of KYA document.
-     */
-    function getKYA() public view returns (bytes32, string memory, address) {
-        return (_kya.kyaHash, _kya.kyaUrl, address(_restrictions));
-    }
-
-    /**
-     * @dev Internal function to change KYA hash and url.
-     * Emits KYAUpdated event.
-     *
-     * @param kyaHash SHA256 hash of KYA document.
-     * @param kyaUrl URL of token's KYA document (ipfs, http, etc.).
      * @param restrictions address implementing on-chain restriction checks
-     * or address(0) if no rules should be checked on chain.
+     *                     or address(0) if no rules should be checked on chain.
+     * @param rules address implementing on-chain restriction checks
      * @return True on success.
      */
-    function _updateKYA(bytes32 kyaHash, string memory kyaUrl, address restrictions, address rules) internal returns (bool) {
-        _kya.kyaHash = kyaHash;
-        _kya.kyaUrl = kyaUrl;
+    function _updateRestrictionsAndRules(address restrictions, address rules) internal returns (bool) {
 
         _restrictions = ITransferRestrictions(restrictions);
         _rules = ITransferRules(rules);
@@ -159,7 +141,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
             require(_rules.setSRC(address(this)), "SRC20 contract already set in transfer rules");
         }
 
-        emit KYAUpdated(kyaHash, kyaUrl, restrictions, rules);
+        emit RestrictionsAndRulesUpdated(restrictions, rules);
         return true;
     }
 
@@ -185,7 +167,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
         bytes32 hash,
         bytes calldata signature
     )
-    external returns (bool)
+        external returns (bool)
     {
         return _transferToken(msg.sender, to, value, nonce, expirationTime, hash, signature);
     }
@@ -216,7 +198,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
         bytes32 hash,
         bytes calldata signature
     )
-    external returns (bool)
+        external returns (bool)
     {
         _transferToken(from, to, value, nonce, expirationTime, hash, signature);
         _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
@@ -236,10 +218,10 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
     * @return True on success.
     */
     function transferTokenForced(address from, address to, uint256 value)
-    external
-    enabled(_features.ForceTransfer())
-    onlyOwner
-    returns (bool)
+        external
+        enabled(_features.ForceTransfer())
+        onlyOwner
+        returns (bool)
     {
         _transfer(from, to, value);
         return true;
@@ -274,10 +256,10 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
      * @return True on success.
      */
     function burnAccount(address account, uint256 value)
-    external
-    enabled(_features.AccountBurning())
-    onlyOwner
-    returns (bool)
+        external
+        enabled(_features.AccountBurning())
+        onlyOwner
+        returns (bool)
     {
         _burn(account, value);
         return true;
@@ -354,6 +336,8 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
     }
 
     function transfer(address to, uint256 value) external returns (bool) {
+        require(_features.checkTransfer(msg.sender, to));
+
         if (_rules != ITransferRules(0)) {
             require(_rules.doTransfer(msg.sender, to, value), "Transfer failed");
         } else {
@@ -364,6 +348,8 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
     }
 
     function transferFrom(address from, address to, uint256 value) public returns (bool) {
+        require(_features.checkTransfer(from, to));
+
         if (_rules != ITransferRules(0)) {
             _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
             require(_rules.doTransfer(from, to, value), "Transfer failed");
@@ -422,7 +408,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
         bytes32 hash,
         bytes memory signature
     )
-    internal returns (bool)
+        internal returns (bool)
     {
         if (address(_restrictions) != address(0)) {
             require(_restrictions.authorize(from, to, value), "transferToken restrictions failed");
@@ -430,12 +416,16 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
 
         require(now <= expirationTime, "transferToken params expired");
         require(nonce == _nonce[from], "transferToken params wrong nonce");
+
+        (bytes32 kyaHash, string memory kyaUrl) = _assetRegistry.getKYA(address(this));
+
         require(
-            keccak256(abi.encodePacked(_kya.kyaHash, from, to, value, nonce, expirationTime)) == hash,
+            keccak256(abi.encodePacked(kyaHash, from, to, value, nonce, expirationTime)) == hash,
             "transferToken params bad hash"
         );
         require(_roles.isAuthority(hash.toEthSignedMessageHash().recover(signature)), "transferToken params not authority");
 
+        require(_features.checkTransfer(from, to));
         _transfer(from, to, value);
 
         return true;
@@ -448,14 +438,12 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
      * @param value The amount to be transferred.
      */
     function _transfer(address from, address to, uint256 value) internal {
-        require(!_features.checkTransfer(from, to));
         require(to != address(0));
 
         _balances[from] = _balances[from].sub(value);
         _balances[to] = _balances[to].add(value);
 
         _nonce[from]++;
-        // no need for safe math here
 
         emit Transfer(from, to, value);
     }
@@ -488,6 +476,8 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
         require(account != address(0), 'minting to zero address');
 
         _totalSupply = _totalSupply.add(value);
+        require(_totalSupply <= _maxTotalSupply || _maxTotalSupply == 0, 'trying to mint too many tokens!');
+
         _balances[account] = _balances[account].add(value);
 
         emit Transfer(address(0), account, value);
@@ -523,7 +513,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
      * @param _addresses an array of addresses to transfer to
      * @param _values an array of values
      * @return True on success
-     */ 
+     */
     function bulkTransfer (
         address[] calldata _addresses, uint256[] calldata _values) external onlyDelegate returns (bool) {
         require(_addresses.length == _values.length, "Input dataset length mismatch");
@@ -556,9 +546,9 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Ownable {
 
         uint256 count = _transfers.length;
         for (uint256 i = 0; i < count; i++) {
-            uint256 transfer = _transfers[i];
-            uint256 value = (transfer >> 160) * _lotSize;
-            address to = address (transfer & 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+            uint256 tr = _transfers[i];
+            uint256 value = (tr >> 160) * _lotSize;
+            address to = address (tr & 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
             _approve(owner(), msg.sender, _allowances[owner()][msg.sender].sub(value));
             _transfer(owner(), to, value);
         }

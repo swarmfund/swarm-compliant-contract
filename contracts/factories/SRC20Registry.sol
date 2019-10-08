@@ -7,15 +7,15 @@ import "../interfaces/ISRC20Registry.sol";
 
 
 /**
- * @dev SRC20 registry contains addresses of every created 
- * SRC20 token. Registered factories can put addresses of
+ * @dev SRC20 registry contains the address of every created 
+ * SRC20 token. Registered factories can add addresses of
  * new tokens, public can query tokens.
  */
 contract SRC20Registry is ISRC20Registry, Manager {
     using Roles for Roles.Role;
 
     Roles.Role private _factories;
-
+    mapping (address => bool) _authorizedMinters;
 
     /**
      * @dev constructor requiring SWM ERC20 contract address.
@@ -61,7 +61,7 @@ contract SRC20Registry is ISRC20Registry, Manager {
     }
 
     /**
-     * @dev Adds token to registry. Allowed only to factories.
+     * @dev Adds token to registry. Only factories can add.
      * Emits SRC20Registered event.
      *
      * @param token The token address.
@@ -69,14 +69,16 @@ contract SRC20Registry is ISRC20Registry, Manager {
      * @param tokenOwner Owner of the token.
      * @return True on success.
      */
-    function put(address token, address roles, address tokenOwner) external returns (bool) {
+    function put(address token, address roles, address tokenOwner, address minter) external returns (bool) {
         require(token != address(0), "token is zero address");
         require(roles != address(0), "roles is zero address");
         require(tokenOwner != address(0), "tokenOwner is zero address");
         require(_factories.has(msg.sender), "factory not registered");
+        require(_authorizedMinters[minter] == true, 'minter not authorized');
 
         _registry[token].owner = tokenOwner;
         _registry[token].roles = roles;
+        _registry[token].minter = minter;
 
         emit SRC20Registered(token, tokenOwner);
 
@@ -109,5 +111,37 @@ contract SRC20Registry is ISRC20Registry, Manager {
      */
     function contains(address token) external view returns (bool) {
         return _registry[token].owner != address(0);
+    }
+
+    /**
+     *  This proxy function adds a contract to the list of authorized minters
+     *
+     *  @param minter The address of the minter contract to add to the list of authorized minters
+     *  @return true on success
+     */
+    function addMinter(address minter) external onlyOwner returns (bool) {
+        require(minter != address(0), "minter is zero address");
+
+        _authorizedMinters[minter] = true;
+
+        emit MinterAdded(minter);
+
+        return true;
+    }
+
+    /**
+     *  This proxy function removes a contract from the list of authorized minters
+     *
+     *  @param minter The address of the minter contract to remove from the list of authorized minters
+     *  @return true on success
+     */
+    function removeMinter(address minter) external onlyOwner returns (bool) {
+        require(minter != address(0), "minter is zero address");
+
+        _authorizedMinters[minter] = false;
+
+        emit MinterRemoved(minter);
+
+        return true;
     }
 }

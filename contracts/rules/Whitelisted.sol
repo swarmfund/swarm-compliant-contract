@@ -16,7 +16,7 @@ contract Whitelisted is Ownable {
         _whitelisted[account] = true;
     }
 
-    function blacklistAccount(address account) external onlyOwner {
+    function unWhitelistAccount(address account) external onlyOwner {
          _whitelisted[account] = false;
     }
 

@@ -6,13 +6,14 @@ import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/ISRC20.sol";
 import "../interfaces/ISRC20Managed.sol";
 import "../interfaces/ISRC20Roles.sol";
+import "../interfaces/IManager.sol";
 
 
 /**
  * @dev Manager handles SRC20 burn/mint in relation to
  * SWM token staking.
  */
-contract Manager is Ownable {
+contract Manager is IManager, Ownable {
     using SafeMath for uint256;
 
     event SRC20SupplyMinted(address src20, address swmAccount, uint256 swmValue, uint256 src20Value);
@@ -27,6 +28,7 @@ contract Manager is Ownable {
         uint256 stake;
         uint256 _swm;
         uint256 _src;
+        address minter;
     }
 
     IERC20 private _swmERC20;
@@ -38,7 +40,14 @@ contract Manager is Ownable {
     }
 
     modifier onlyTokenOwner(address src20) {
-        require(_isTokenOwner(src20), "caller not token owner");
+        require(_isTokenOwner(src20), "Caller not token owner.");
+        _;
+    }
+
+    // Note that, similarly to the role of token owner, there is only one manager per src20 token contract.
+    // Only one address can have this role.
+    modifier onlyMinter(address src20) {
+        require(msg.sender == _registry[src20].minter, "Caller not token minter.");
         _;
     }
 
@@ -60,7 +69,7 @@ contract Manager is Ownable {
      * @return true on success.
      */
     function mintSupply(address src20, address swmAccount, uint256 swmValue, uint256 src20Value)
-        onlyOwner
+        onlyMinter(src20)
         external
         returns (bool)
     {
@@ -83,7 +92,7 @@ contract Manager is Ownable {
 
     /**
      * @dev Increase stake and mint SRC20 tokens based on current SWM/SRC20 ratio.
-     * Only SRC20 Token owner can invoke this method.
+     * Only SRC20 token owner can invoke this method.
      * Emits SRC20StakeIncreased event.
      *
      * @param src20 SRC20 token address.
