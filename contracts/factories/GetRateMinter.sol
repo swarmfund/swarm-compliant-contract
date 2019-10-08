@@ -1,5 +1,6 @@
 pragma solidity ^0.5.0;
 
+import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "../interfaces/IManager.sol";
 import "../interfaces/INetAssetValueUSD.sol";
@@ -13,6 +14,8 @@ contract GetRateMinter {
     IManager public _registry;
     INetAssetValueUSD public _asset;
     IPriceUSD public _SWMPriceOracle;
+
+    using SafeMath for uint256;
 
     constructor(address registry, address asset, address SWMRate) public {
         _registry = IManager(registry);
@@ -45,29 +48,29 @@ contract GetRateMinter {
             stakeUSD = 2500;
 
         if(NAV > 500000 && NAV <= 1000000) // From 500K up to 1M stake is 0.5%
-            stakeUSD = NAV * 5 / 1000;
+            stakeUSD = NAV.mul(5).div(1000);
 
         if(NAV > 1000000 && NAV <= 5000000) // From 1M up to 5M stake is 0.45%
-            stakeUSD = NAV * 45 / 10000;
+            stakeUSD = NAV.mul(45).div(10000);
 
         if(NAV > 5000000 && NAV <= 15000000) // From 5M up to 15M stake is 0.40%
-            stakeUSD = NAV * 4 / 1000;
+            stakeUSD = NAV.mul(4).div(1000);
 
         if(NAV > 15000000 && NAV <= 50000000) // From 15M up to 50M stake is 0.25%
             stakeUSD = NAV * 25 / 10000;
 
         if(NAV > 50000000 && NAV <= 100000000) // From 50M up to 100M stake is 0.20%
-            stakeUSD = NAV * 2 / 1000;
+            stakeUSD = NAV.mul(2).div(1000);
 
         if(NAV > 100000000 && NAV <= 150000000) // From 100M up to 150M stake is 0.15%
-            stakeUSD = NAV * 15 / 10000;
+            stakeUSD = NAV.mul(15).div(10000);
 
         if(NAV > 150000000) // From 150M up stake is 0.10%
-            stakeUSD = NAV * 1 / 1000;
+            stakeUSD = NAV.mul(1).div(1000);
 
         (uint256 numerator, uint denominator) = _SWMPriceOracle.getPrice(); // 0.04 is returned as (4, 100)
 
-        return (stakeUSD * denominator / numerator) * 10**18;
+        return (stakeUSD.mul(denominator).div(numerator)) * 10**18; // We return Wei
 
     } /// fn calcStake
 
