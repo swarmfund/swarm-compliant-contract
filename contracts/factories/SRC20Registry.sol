@@ -14,13 +14,6 @@ import "../interfaces/ISRC20Registry.sol";
 contract SRC20Registry is ISRC20Registry, Manager {
     using Roles for Roles.Role;
 
-    event FactoryAdded(address account);
-    event FactoryRemoved(address account);
-    event SRC20Registered(address token, address tokenOwner);
-    event SRC20Removed(address token);
-    event MinterAdded(address minter);
-    event MinterRemoved(address minter); // @TODO move to interface
-
     Roles.Role private _factories;
     mapping (address => bool) _authorizedMinters;
 

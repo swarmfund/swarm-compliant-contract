@@ -43,9 +43,11 @@ contract Featured is IFeatured, Pausable, Freezable, Ownable {
      *
      * @param from The address to transfer from.
      * @param to The address to send tokens to.
+     *
+     * @return True if the transfer is allowed
      */
     function checkTransfer(address from, address to) external view returns (bool) {
-        return _isAccountFrozen(from) && _isAccountFrozen(to) && paused();
+        return !_isAccountFrozen(from) && !_isAccountFrozen(to) && !paused();
     }
 
     /**

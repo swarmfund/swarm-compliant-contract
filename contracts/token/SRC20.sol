@@ -22,8 +22,6 @@ contract SRC20 is ISRC20, ISRC20Managed, SRC20Detailed, Ownable {
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
-    event RestrictionsAndRulesUpdated(address restrictions, address rules);
-
     mapping(address => uint256) public _balances;
     mapping(address => mapping(address => uint256)) public _allowances;
     uint256 public _totalSupply;
@@ -338,7 +336,7 @@ contract SRC20 is ISRC20, ISRC20Managed, SRC20Detailed, Ownable {
     }
 
     function transfer(address to, uint256 value) external returns (bool) {
-        require(!_features.checkTransfer(msg.sender, to));
+        require(_features.checkTransfer(msg.sender, to));
 
         if (_rules != ITransferRules(0)) {
             require(_rules.doTransfer(msg.sender, to, value), "Transfer failed");
@@ -350,7 +348,7 @@ contract SRC20 is ISRC20, ISRC20Managed, SRC20Detailed, Ownable {
     }
 
     function transferFrom(address from, address to, uint256 value) public returns (bool) {
-        require(!_features.checkTransfer(from, to));
+        require(_features.checkTransfer(from, to));
 
         if (_rules != ITransferRules(0)) {
             _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
@@ -427,7 +425,7 @@ contract SRC20 is ISRC20, ISRC20Managed, SRC20Detailed, Ownable {
         );
         require(_roles.isAuthority(hash.toEthSignedMessageHash().recover(signature)), "transferToken params not authority");
 
-        require(!_features.checkTransfer(from, to));
+        require(_features.checkTransfer(from, to));
         _transfer(from, to, value);
 
         return true;
