@@ -57,7 +57,7 @@ contract GetRateMinter {
             stakeUSD = NAV.mul(4).div(1000);
 
         if(NAV > 15000000 && NAV <= 50000000) // From 15M up to 50M stake is 0.25%
-            stakeUSD = NAV * 25 / 10000;
+            stakeUSD = NAV.mul(25).div(10000);
 
         if(NAV > 50000000 && NAV <= 100000000) // From 50M up to 100M stake is 0.20%
             stakeUSD = NAV.mul(2).div(1000);
