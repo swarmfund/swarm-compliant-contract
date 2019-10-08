@@ -70,7 +70,7 @@ contract GetRateMinter {
 
         (uint256 numerator, uint denominator) = _SWMPriceOracle.getPrice(); // 0.04 is returned as (4, 100)
 
-        return (stakeUSD.mul(denominator).div(numerator)) * 10**18; // We return Wei
+        return stakeUSD.mul(denominator).div(numerator).mul(10**18); // 10**18 because we return Wei
 
     } /// fn calcStake
 
