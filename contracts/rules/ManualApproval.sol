@@ -70,7 +70,7 @@ contract ManualApproval is Ownable {
         TransferReq memory req = _transferReq[reqNumber];
         require(req.from == msg.sender, "Not owner of the transfer request");
 
-        _src20.executeTransfer(address(this), req.from, req.value);
+        require(_src20.executeTransfer(address(this), req.from, req.value), "SRC20: External transfer failed");
 
         delete _transferReq[reqNumber];
         emit TransferRequestCanceled(reqNumber, req.from, req.to, req.value);
@@ -83,13 +83,29 @@ contract ManualApproval is Ownable {
         return _greyList[account];
     }
 
-    function greyListAccount(address account) external onlyOwner returns (bool){
+    function greyListAccount(address account) external onlyOwner returns (bool) {
         _greyList[account] = true;
         return true;
     }
 
-    function unGreyListAccount(address account) external onlyOwner returns (bool){
+    function bulkGreyListAccount(address[] calldata accounts) external onlyOwner returns (bool) {
+        for (uint256 i = 0; i < accounts.length ; i++) {
+            address account = accounts[i];
+            _greyList[account] = true;
+        }
+        return true;
+    }
+
+    function unGreyListAccount(address account) external onlyOwner returns (bool) {
         delete _greyList[account];
+        return true;
+    }
+
+    function bulkUnGreyListAccount(address[] calldata accounts) external onlyOwner returns (bool) {
+        for (uint256 i = 0; i < accounts.length ; i++) {
+            address account = accounts[i];
+            delete _greyList[account];
+        }
         return true;
     }
 

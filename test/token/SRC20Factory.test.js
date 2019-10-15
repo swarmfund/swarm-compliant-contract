@@ -34,7 +34,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1, account2, acco
     this.setRateMinter = await SetRateMinter.new(this.registry.address, {from: owner});
     this.registry.addMinter(this.setRateMinter.address, {from: owner});
 
-    this.roles = await SRC20Roles.new(owner, this.registry.address, {from: owner});
+    this.roles = await SRC20Roles.new(owner, this.registry.address, constants.ZERO_ADDRESS, {from: owner});
     this.feature = await Featured.new(owner, features, {from: owner});
 
     const tx = await this.factory.create(
