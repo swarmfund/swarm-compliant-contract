@@ -20,6 +20,7 @@ contract TransferRules is ITransferRules, ManualApproval, Whitelisted {
 
     constructor(address owner) public {
         _transferOwnership(owner);
+        _whitelisted[owner] = true;
     }
 
     /**

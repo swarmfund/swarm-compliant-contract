@@ -67,17 +67,18 @@ module.exports = async function (deployer, network) {
     } else {
         const registry = await SRC20Registry.deployed();
 
-        return deployer.deploy(SRC20Roles,
-            DEVELOPMENT_SWM_TOKEN_OWNER,
-            registry.address,
-        ).then(async function (roles) {
+        return deployer.deploy(TransferRules,
+            TOKEN_OWNER
+        ).then(async function (rules) {
             return deployer.deploy(Featured,
                 DEVELOPMENT_SWM_TOKEN_OWNER,
                 SRC20_FEATURES
             ).then(async function (featured) {
-                return deployer.deploy(TransferRules,
-                    TOKEN_OWNER
-                ).then(async function (rules) {
+                return deployer.deploy(SRC20Roles,
+                    DEVELOPMENT_SWM_TOKEN_OWNER,
+                    registry.address,
+                    rules.address,
+                ).then(async function (roles) {
                     return AssetRegistry.deployed().then(async assetRegistry => {
                         return GetRateMinter.deployed().then(async getRateMinter => {
                             return SRC20Factory.deployed().then(async SRC20Factory => {

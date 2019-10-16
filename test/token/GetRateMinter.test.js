@@ -37,7 +37,7 @@ contract('GetRateMinter', function ([_, owner, account0, account1, account2, acc
     this.GetRateMinter = await GetRateMinter.new(this.registry.address, this.assetRegistry.address, this.sWMPriceOracle.address, {from: owner});
     this.registry.addMinter(this.GetRateMinter.address, {from: owner});
 
-    this.roles = await SRC20Roles.new(owner, this.registry.address, {from: owner});
+    this.roles = await SRC20Roles.new(owner, this.registry.address, account0, {from: owner});
     this.feature = await Featured.new(owner, features, {from: owner});
 
     const tx = await this.factory.create(

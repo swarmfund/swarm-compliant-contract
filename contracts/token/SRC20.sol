@@ -336,7 +336,7 @@ contract SRC20 is ISRC20, ISRC20Managed, SRC20Detailed, Ownable {
     }
 
     function transfer(address to, uint256 value) external returns (bool) {
-        require(_features.checkTransfer(msg.sender, to));
+        require(_features.checkTransfer(msg.sender, to), "Feature transfer check");
 
         if (_rules != ITransferRules(0)) {
             require(_rules.doTransfer(msg.sender, to, value), "Transfer failed");
@@ -348,7 +348,7 @@ contract SRC20 is ISRC20, ISRC20Managed, SRC20Detailed, Ownable {
     }
 
     function transferFrom(address from, address to, uint256 value) public returns (bool) {
-        require(_features.checkTransfer(from, to));
+        require(_features.checkTransfer(from, to), "Feature transfer check");
 
         if (_rules != ITransferRules(0)) {
             _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
@@ -425,7 +425,7 @@ contract SRC20 is ISRC20, ISRC20Managed, SRC20Detailed, Ownable {
         );
         require(_roles.isAuthority(hash.toEthSignedMessageHash().recover(signature)), "transferToken params not authority");
 
-        require(_features.checkTransfer(from, to));
+        require(_features.checkTransfer(from, to), "Feature transfer check");
         _transfer(from, to, value);
 
         return true;
@@ -438,7 +438,7 @@ contract SRC20 is ISRC20, ISRC20Managed, SRC20Detailed, Ownable {
      * @param value The amount to be transferred.
      */
     function _transfer(address from, address to, uint256 value) internal {
-        require(to != address(0));
+        require(to != address(0), "Recipient is zero address");
 
         _balances[from] = _balances[from].sub(value);
         _balances[to] = _balances[to].add(value);
