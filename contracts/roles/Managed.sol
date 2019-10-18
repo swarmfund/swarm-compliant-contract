@@ -29,7 +29,7 @@ contract Managed {
     /**
      * @return true if `msg.sender` is the owner of the contract.
      */
-    function _isManager(address account) public view returns (bool) {
+    function _isManager(address account) internal view returns (bool) {
         return account == _manager;
     }
 

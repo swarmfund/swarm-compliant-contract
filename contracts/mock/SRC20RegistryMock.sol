@@ -12,8 +12,4 @@ contract SRC20RegistryMock is SRC20Registry {
         public
     {
     }
-
-    function getStake(address src20) external view returns (uint256) {
-        return _registry[src20].stake;
-    }
 }
