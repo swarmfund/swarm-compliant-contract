@@ -15,6 +15,10 @@ contract ISRC20Registry {
     function remove(address token) external returns (bool);
     function contains(address token) external view returns (bool);
 
+    function addMinter(address minter) external returns (bool);
+    function getMinter(address src20) external view returns (address);
+    function removeMinter(address minter) external returns (bool);
+
     function addFactory(address account) external returns (bool);
     function removeFactory(address account) external returns (bool);
 }

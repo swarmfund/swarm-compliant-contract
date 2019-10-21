@@ -130,14 +130,13 @@ contract SRC20Registry is ISRC20Registry, Manager {
     }
 
     /**
-     *  With this function you can check if address is allowed minter for SRC20.
+     *  With this function you can fetch address of authorized minter for SRC20.
      *
      *  @param src20 Address of SRC20 token we want to check minters for.
-     *  @param minter The address of the minter contract to check.
-     *  @return true if address is minter.
+     *  @return address of authorized minter.
      */
-    function isMinter(address src20, address minter) external view returns (bool) {
-        return _registry[src20].minter == minter;
+    function getMinter(address src20) external view returns (address) {
+        return _registry[src20].minter;
     }
 
     /**

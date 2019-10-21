@@ -55,7 +55,7 @@ contract SRC20Roles is ISRC20Roles, DelegateRole, AuthorityRole, Managed, Ownabl
         return _manager;
     }
 
-    function isManager(address account) public view returns (bool) {
+    function isManager(address account) external view returns (bool) {
         return _isManager(account);
     }
 

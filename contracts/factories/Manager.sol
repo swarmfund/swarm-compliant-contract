@@ -17,8 +17,8 @@ contract Manager is IManager, Ownable {
     using SafeMath for uint256;
 
     event SRC20SupplyMinted(address src20, address swmAccount, uint256 swmValue, uint256 src20Value);
-    event SRC20StakeIncreased(address src20, address swmAccount, uint256 swmValue);
-    event SRC20StakeDecreased(address src20, address swmAccount, uint256 swmValue);
+    event SRC20SupplyIncreased(address src20, address swmAccount, uint256 srcValue);
+    event SRC20SupplyDecreased(address src20, address swmAccount, uint256 srcValue);
 
     mapping (address => SRC20) internal _registry;
 
@@ -26,8 +26,6 @@ contract Manager is IManager, Ownable {
         address owner;
         address roles;
         uint256 stake;
-        uint256 _swm;
-        uint256 _src;
         address minter;
     }
 
@@ -79,8 +77,6 @@ contract Manager is IManager, Ownable {
         require(_registry[src20].owner != address(0), "SRC20 token contract not registered");
 
         _registry[src20].stake = _registry[src20].stake.add(swmValue);
-        _registry[src20]._swm = swmValue;
-        _registry[src20]._src = src20Value;
 
         require(_swmERC20.transferFrom(swmAccount, address(this), swmValue));
         require(ISRC20Managed(src20).mint(_registry[src20].owner, src20Value));
@@ -91,64 +87,59 @@ contract Manager is IManager, Ownable {
     }
 
     /**
-     * @dev Increase stake and mint SRC20 tokens based on current SWM/SRC20 ratio.
-     * Only SRC20 token owner can invoke this method.
-     * Emits SRC20StakeIncreased event.
+     * @dev This is function token issuer can call in order to increase his SRC20 supply this
+     * and stake his tokens.
      *
-     * @param src20 SRC20 token address.
-     * @param swmAccount SWM ERC20 account holding enough SWM stake tokens (>= swmValue)
-     * with manager contract address approved to transferFrom.
-     * @param swmValue SWM stake value.
-     * @return true on success.
+     * @param src20 Address of src20 token contract
+     * @param swmAccount Account from which stake tokens are going to be deducted
+     * @param srcValue Value of desired SRC20 token value
+     * @return true if success
      */
-    function incStake(address src20, address swmAccount, uint256 swmValue)
+    function increaseSupply(address src20, address swmAccount, uint256 srcValue)
         external
         onlyTokenOwner(src20)
         returns (bool)
     {
         require(swmAccount != address(0), "SWM account is zero");
-        require(swmValue != 0, "SWM value is zero");
+        require(srcValue != 0, "SWM value is zero");
         require(_registry[src20].owner != address(0), "SRC20 token contract not registered");
-        require(_registry[src20]._swm != 0, "Token not minted");
 
-        _registry[src20].stake = _registry[src20].stake.add(swmValue);
+        uint256 swmValue = _swmNeeded(src20, srcValue);
 
         require(_swmERC20.transferFrom(swmAccount, address(this), swmValue));
-        require(ISRC20Managed(src20).mint(_registry[src20].owner, _calcTokens(src20, swmValue)));
+        require(ISRC20Managed(src20).mint(_registry[src20].owner, srcValue));
 
-        emit SRC20StakeIncreased(src20, swmAccount, swmValue);
+        _registry[src20].stake = _registry[src20].stake.add(swmValue);
+        emit SRC20SupplyIncreased(src20, swmAccount, swmValue);
 
         return true;
     }
 
     /**
-     * @dev Decrease stake and burn SRC20 tokens based on current SWM/SRC20 ratio.
-     * Owner address in SRC20 Token needs to have required amount of SRC20 tokens
-     * to burn.
-     * Only SRC20 Token owner can invoke this method.
-     * Emits SRC20StakeDecreased event.
+     * @dev This is function token issuer can call in order to decrease his SRC20 supply
+     * and his stake back
      *
-     * @param src20 SRC20 token address.
-     * @param swmAccount SWM ERC20 account to receive SWM tokens.
-     * @param swmValue SWM stake value.
-     * @return true on success
+     * @param src20 Address of src20 token contract
+     * @param swmAccount Account to which stake tokens will be returned
+     * @param srcValue Value of desired SRC20 token value
+     * @return true if success
      */
-    function decStake(address src20, address swmAccount, uint256 swmValue)
+    function decreaseSupply(address src20, address swmAccount, uint256 srcValue)
         external
         onlyTokenOwner(src20)
         returns (bool)
     {
         require(swmAccount != address(0), "SWM account is zero");
-        require(swmValue != 0, "SWM value is zero");
+        require(srcValue != 0, "SWM value is zero");
         require(_registry[src20].owner != address(0), "SRC20 token contract not registered");
-        require(_registry[src20]._swm != 0, "Token not minted");
 
-        _registry[src20].stake = _registry[src20].stake.sub(swmValue);
+        uint256 swmValue = _swmNeeded(src20, srcValue);
 
         require(_swmERC20.transfer(swmAccount, swmValue));
-        require(ISRC20Managed(src20).burn(_registry[src20].owner, _calcTokens(src20, swmValue)));
+        require(ISRC20Managed(src20).burn(_registry[src20].owner, srcValue));
 
-        emit SRC20StakeDecreased(src20, swmAccount, swmValue);
+        _registry[src20].stake = _registry[src20].stake.sub(swmValue);
+        emit SRC20SupplyDecreased(src20, swmAccount, srcValue);
 
         return true;
     }
@@ -204,6 +195,50 @@ contract Manager is IManager, Ownable {
     }
 
     /**
+     * @dev External view function for calculating SWM tokens needed for increasing/decreasing
+     * src20 token supply.
+     *
+     * @param src20 Address of src20 contract
+     * @param srcValue Amount of src20 tokens.this
+     * @return Amount of SWM tokens
+     */
+    function swmNeeded(address src20, uint256 srcValue) external view returns (uint256) {
+        return _swmNeeded(src20, srcValue);
+    }
+
+    /**
+     * @dev External function for calculating how much SWM tokens are needed to be staked
+     * in order to get 1 SRC20 token
+     *
+     * @param src20 Address of src20 token contract
+     * @return Amount of SWM tokens
+     */
+    function getSrc20toSwmRatio(address src20) external returns (uint256) {
+        uint256 totalSupply = ISRC20(src20).totalSupply();
+        return totalSupply.mul(10 ** 18).div(_registry[src20].stake);
+    }
+
+    /**
+     * @dev External view function to get current SWM stake
+     *
+     * @param src20 Address of SRC20 token contract
+     * @return Current stake in wei SWM tokens
+     */
+    function getStake(address src20) external view returns (uint256) {
+        return _registry[src20].stake;
+    }
+
+    /**
+     * @dev Get address of token owner
+     *
+     * @param src20 Address of SRC20 token contract
+     * @return Address of token owner
+     */
+    function getTokenOwner(address src20) external view returns (address) {
+        return _registry[src20].owner;
+    }
+
+    /**
      * @dev Internal function calculating new SRC20 values based on minted ones. On every
      * new minting of supply new SWM and SRC20 values are saved for further calculations.
      *
@@ -215,9 +250,16 @@ contract Manager is IManager, Ownable {
         require(src20 != address(0), "Token address is zero");
         require(swmValue != 0, "SWM value is zero");
         require(_registry[src20].owner != address(0), "SRC20 token contract not registered");
-        require(_registry[src20]._swm != 0, "Token not minted");
 
-        return swmValue.mul(_registry[src20]._src).div(_registry[src20]._swm);
+        uint256 totalSupply = ISRC20(src20).totalSupply();
+
+        return swmValue.mul(totalSupply).div(_registry[src20].stake);
+    }
+
+    function _swmNeeded(address src20, uint256 srcValue) internal view returns (uint256) {
+        uint256 totalSupply = ISRC20(src20).totalSupply();
+
+        return srcValue.mul(_registry[src20].stake).div(totalSupply);
     }
 
     /**
