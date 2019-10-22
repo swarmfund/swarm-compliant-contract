@@ -44,7 +44,7 @@ contract GetRateMinter {
         uint256 NAV = netAssetValueUSD; // Value in USD, an integer
         uint256 stakeUSD;
 
-        if(NAV > 0 && NAV <= 500000) // Up to 500,000 NAV the stake is flat at 2,500 USD
+        if(NAV >= 0 && NAV <= 500000) // Up to 500,000 NAV the stake is flat at 2,500 USD
             stakeUSD = 2500;
 
         if(NAV > 500000 && NAV <= 1000000) // From 500K up to 1M stake is 0.5%
