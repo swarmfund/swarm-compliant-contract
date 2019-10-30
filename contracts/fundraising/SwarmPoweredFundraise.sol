@@ -12,14 +12,9 @@ contract SwarmPoweredFundraise {
     // array
 
     function () external payable {
-        revert();
-
     }
 
-    function contribute() public returns (bool) {
+    function contribute(address erc20, uint256 amount) public returns (bool) {
         return true;
-
     }
-
-
 }

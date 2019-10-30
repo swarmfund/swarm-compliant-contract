@@ -7,10 +7,14 @@ import "./SwarmPoweredFundraise.sol";
  * @title The Fundraise Contract
  * This contract allows the deployer to perform a Swarm-Powered Fundraise.
  */
-contract SwarmPoweredFundraiseMock is SwarmPoweredFundraise {
+contract SwarmPoweredFundraiseTerminatedMock is SwarmPoweredFundraise {
 
     using SafeMath for uint256;
     // array
+
+    function () external payable {
+        revert();
+    }
 
     function getBalanceETH(address contributor) public view returns (uint256) {
         return 0;
