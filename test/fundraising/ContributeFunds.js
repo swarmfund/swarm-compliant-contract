@@ -46,7 +46,20 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
       assert.equal(afterBalance === beforeBalance.add(amount), true);
     });
 
-    it('should reject ETH contributions after the fundraise has terminated', async function () {
+    it('should allow token issuer to accept ERC20 investment that is not registered');
+
+    it('should allow token issuer to reject ERC20 investment that is not registered'); // @TODO this should be normal transfer...
+
+  });
+
+  describe('Handling contribution rejection', function () {
+    it('if it does not satisfy contribution rules - min amount');
+
+    it('if it does not satisfy contribution rules - max amount');
+
+    it('if it does not satisfy contribution rules - max contribution');
+
+    it('should reject ETH contributions after the fundraising has finished', async function () {
       // check current state of contract
       const beforeBalance = await this.swarmPoweredFundraiseMock.getBalanceETH(contributor);
 
@@ -57,8 +70,50 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
       const afterBalance = await this.swarmPoweredFundraiseMock.getBalanceETH(contributor);
 
       assert.equal(afterBalance === beforeBalance, true);
-    });
+    }); // todo revert message
 
+    it('should reject ETH contributions after the fundraising has been canceled', async function () {
+      // check current state of contract
+      const beforeBalance = await this.swarmPoweredFundraiseMock.getBalanceETH(contributor);
+
+      // send funds to terminated fundraising contract
+      await this.swarmPoweredFundraiseMock.send(amount, {from:owner});
+
+      // check that funds are NOT added to the contributions
+      const afterBalance = await this.swarmPoweredFundraiseMock.getBalanceETH(contributor);
+
+      assert.equal(afterBalance === beforeBalance, true);
+    }); // todo revert message
+
+    it('should reject ETH contributions after the fundraising has expired', async function () {
+      // check current state of contract
+      const beforeBalance = await this.swarmPoweredFundraiseMock.getBalanceETH(contributor);
+
+      // send funds to terminated fundraising contract
+      await this.swarmPoweredFundraiseMock.send(amount, {from:owner});
+
+      // check that funds are NOT added to the contributions
+      const afterBalance = await this.swarmPoweredFundraiseMock.getBalanceETH(contributor);
+
+      assert.equal(afterBalance === beforeBalance, true);
+    }); // todo revert message
+
+    it('should reject contribution if ERC20 token is not accepted');
   });
 
+  describe('Handling withdrawals of the contributions', function () { // @TODO move to new file
+    it('should allow contributor to withdraw his investment in ETH if fundraising is finished');
+
+    it('should allow contributor to withdraw his investment in ERC20 token if fundraising is finished');
+
+    it('should not allow contributor to withdraw his contribution in ETH if fundraising is not finished');
+
+    it('should not allow contributor to withdraw his contribution in ERC20 if fundraising is not finished');
+
+    it('should reject contributor to withdraw his investment if fundraising is finished'); // @TODO check this...
+  });
+
+  describe('Handling if fundraising is set up correctly', function () {
+    it('should have initialized fundraising');// @TODO check how to set everything...
+  });
 });
