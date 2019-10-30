@@ -17,4 +17,12 @@ contract SwarmPoweredFundraise {
     function contribute(address erc20, uint256 amount) public returns (bool) {
         return true;
     }
+
+    function acceptContribution(address contributor, address erc20, uint256 amount) public returns (bool) {
+        return true;
+    }
+
+    function rejectContribution(address contributor, address erc20, uint256 amount) public returns (bool) {
+        return true;
+    }
 }
