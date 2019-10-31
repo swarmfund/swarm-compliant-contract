@@ -147,7 +147,7 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
     it('should reject contribution if ERC20 token is not accepted', async function () {
       // contribute
       await this.acceptedToken.approve(this.swarmPoweredFundraiseMock.address, amount, {from: owner});
-      await shouldFail.reverting.withMessage(this.swarmPoweredFundraiseMock.contribute(this.acceptedToken.address, amount, {from: owner}),
+      await shouldFail.reverting.withMessage(this.swarmPoweredFundraiseMock.contribute(this.notAcceptedToken.address, amount, {from: owner}),
           'Contribution has been rejected: currency not accepted');
     });
   });
@@ -192,42 +192,5 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
       await shouldFail.reverting.withMessage(this.swarmPoweredFundraiseMock.withdrawInvestmentToken({from: owner}),
           'Contribution withdrawal has been rejected: Fundraising not finished');
     });
-  });
-
-  describe('Handling if fundraising is set up correctly', function () {
-    it('should have all needed variables');
-
-    it('should fail if fundraising is started without src20 token');
-
-    it('should allow token issuer to set src20 token price');
-
-    it('should allow token issuer to set total amount of src20 tokens');
-
-    it('should not allow token issuer to set src20 token price if total amount of tokens are already set');
-
-    it('should not allow token issuer to set total amount of src20 tokens if price is already set');
-
-    it('should be able to set start and end date of the fundraising');
-
-    it('should not be able to contribute if fundraising did not start');
-
-    it('should be able to set hard and soft cap on fundraising deployment');
-
-    // Locking contributions
-    it('should be able to withdraw contribution if contributions withdrawl are allowed');
-
-    it('should be able to put presale amount and presale tokens with seperate functions');
-
-    it('should fail if presale amount is larger than hardcap');
-
-    it('should fail if presale tokens is larger than total amount of tokens');
-
-    it('should be able to set base currency from accepted currencies');
-
-    it('should not be able to set base currency from not accepted currencies');
-
-    it('should pass contribution rules');
-
-    it('should fail contribution rules');
   });
 });
