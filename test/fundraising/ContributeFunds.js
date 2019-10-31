@@ -17,7 +17,7 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
   const maxAmount = new BN(100);
 
   beforeEach(async function () {
-    this.swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new({from: owner});
+    this.swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new({from: owner}); // @TODO change owner to be token issuer...
     this.swarmPoweredFundraiseFinished = await SwarmPoweredFundraiseFinished.new({from: owner});
     this.swarmPoweredFundraiseCanceled = await SwarmPoweredFundraiseCanceled.new({from: owner});
     this.swarmPoweredFundraiseExpired = await SwarmPoweredFundraiseExpired.new({from: owner});
@@ -33,7 +33,7 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
       const beforeBalance = await this.swarmPoweredFundraiseMock.getBalanceETH(contributor);
 
       // contribute funds
-      await this.swarmPoweredFundraiseMock.send(amount, {from:owner});
+      await this.swarmPoweredFundraiseMock.send(amount, {from: owner});
 
       // check that the funds are added to the contributions of the msg.sender
       const afterBalance = await this.swarmPoweredFundraiseMock.getBalanceETH(contributor);
@@ -46,7 +46,7 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
       const beforeBalance = await this.swarmPoweredFundraiseMock.getBalanceToken(this.acceptedToken.address, contributor);
 
       // contribute
-      await this.acceptedToken.approve(this.swarmPoweredFundraiseMock.address, amount);
+      await this.acceptedToken.approve(this.swarmPoweredFundraiseMock.address, amount, {from: owner});
       await this.swarmPoweredFundraiseMock.contribute(this.acceptedToken.address, amount, {from: owner});
 
       // check that the funds are added to the contributions of the msg.sender
@@ -145,22 +145,52 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
 
     it('should reject contribution if ERC20 token is not accepted', async function () {
       // contribute
-      await this.acceptedToken.approve(this.swarmPoweredFundraiseMock.address, amount);
+      await this.acceptedToken.approve(this.swarmPoweredFundraiseMock.address, amount, {from: owner});
       await shouldFail.reverting.withMessage(this.swarmPoweredFundraiseMock.contribute(this.acceptedToken.address, amount, {from: owner}),
           'Contribution has been rejected: currency not accepted');
     });
   });
 
   describe('Handling withdrawals of the contributions', function () { // @TODO move to new file
-    it('should allow contributor to withdraw his investment in ETH if fundraising is finished');
+    it('should allow contributor to withdraw his investments in ETH if fundraising is finished', async function () {
+      const beforeBalance = await this.swarmPoweredFundraiseMock.getBalanceETH(contributor);
 
-    it('should allow contributor to withdraw his investment in ERC20 token if fundraising is finished');
+      await this.swarmPoweredFundraiseMock.send(amount, {from:owner});
+      await this.swarmPoweredFundraiseMock.finishFundraising({from: owner});
 
-    it('should not allow contributor to withdraw his contribution in ETH if fundraising is not finished');
+      await this.swarmPoweredFundraiseMock.withdrawInvestmentETH({from: owner});
+      const afterBalance = await this.swarmPoweredFundraiseMock.getBalanceETH(contributor);
 
-    it('should not allow contributor to withdraw his contribution in ERC20 if fundraising is not finished');
+      assert.equal(afterBalance === beforeBalance, true);
+    });
 
-    it('should reject contributor to withdraw his investment if fundraising is finished'); // @TODO check this...
+    it('should allow contributor to withdraw his investments in ERC20 token if fundraising is finished', async function () {
+      const beforeBalance = await this.swarmPoweredFundraiseMock.getBalanceToken(this.acceptedToken.address, contributor);
+
+      await this.acceptedToken.approve(this.swarmPoweredFundraiseMock.address, amount, {from: owner});
+      await this.swarmPoweredFundraiseMock.contribute(this.acceptedToken.address, amount, {from: owner});
+      await this.swarmPoweredFundraiseMock.finishFundraising({from: owner});
+
+      await this.swarmPoweredFundraiseMock.withdrawInvestmentToken({from: owner});
+      const afterBalance = await this.swarmPoweredFundraiseMock.getBalanceToken(contributor);
+
+      assert.equal(afterBalance === beforeBalance, true);
+    });
+
+    it('should not allow contributor to withdraw his contribution in ETH if fundraising is not finished', async function () {
+      await this.swarmPoweredFundraiseMock.send(amount, {from: owner});
+
+      await shouldFail.reverting.withMessage(this.swarmPoweredFundraiseMock.withdrawInvestmentETH({from: owner}),
+          'Contribution withdrawal has been rejected: Fundraising not finished');
+    });
+
+    it('should not allow contributor to withdraw his contribution in ERC20 if fundraising is not finished', async function () {
+      await this.acceptedToken.approve(this.swarmPoweredFundraiseMock.address, amount, {from: owner});
+      await this.swarmPoweredFundraiseMock.contribute(this.acceptedToken.address, amount, {from: owner});
+
+      await shouldFail.reverting.withMessage(this.swarmPoweredFundraiseMock.withdrawInvestmentToken({from: owner}),
+          'Contribution withdrawal has been rejected: Fundraising not finished');
+    });
   });
 
   describe('Handling if fundraising is set up correctly', function () {

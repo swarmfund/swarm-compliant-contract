@@ -18,11 +18,23 @@ contract SwarmPoweredFundraise {
         return true;
     }
 
-    function acceptContribution(address contributor, address erc20, uint256 amount) public returns (bool) {
+    function acceptContribution(address contributor, address erc20, uint256 amount) external returns (bool) {
         return true;
     }
 
-    function rejectContribution(address contributor, address erc20, uint256 amount) public returns (bool) {
+    function rejectContribution(address contributor, address erc20, uint256 amount) external returns (bool) {
+        return true;
+    }
+
+    function withdrawInvestmentETH() external returns (bool) {
+        return true;
+    }
+
+    function withdrawInvestmentToken() external returns (bool) {
+        return true;
+    }
+
+    function finishFundraising() external returns (bool) {
         return true;
     }
 }
