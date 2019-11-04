@@ -20,6 +20,8 @@ contract SwarmPoweredFundraise {
     uint256 public hardCap;
     address public baseCurrency;
 
+    bool public contributionLocking = true;
+
     uint256 public tokenPriceBCY;
     uint256 public totalTokenAmount;
 
@@ -55,7 +57,7 @@ contract SwarmPoweredFundraise {
         baseCurrency = _baseCurrency;
     }
 
-    function () external payable {
+    function() external payable {
         require(isOngoing, 'Fundraise is not oingoing anymore!');
         sequence++;
         contribution memory c;
@@ -103,37 +105,54 @@ contract SwarmPoweredFundraise {
 
     function withdrawContributionETH() external returns (bool) {
         require(!isOngoing, 'Cannot withdraw, fundraise is ongoing');
-        
-        for(uint256 i=0; i<contributionsList[msg.sender].length; i++) {
-            if(contributionsList[msg.sender][i].currency != address(0))
+
+        for (uint256 i = 0; i < contributionsList[msg.sender].length; i++) {
+            if (contributionsList[msg.sender][i].currency != address(0))
                 continue;
             msg.sender.transfer(contributionsList[msg.sender][i].amount);
             contributionsList[msg.sender][i].amount = 0;
         }
-        
+
         return true;
     }
 
     function withdrawContributionToken() external returns (bool) {
         require(!isOngoing, 'Cannot withdraw, fundraise is ongoing');
 
-        for(uint256 i=0; i<contributionsList[msg.sender].length; i++) {
-            if(contributionsList[msg.sender][i].currency == address(0))
+        for (uint256 i = 0; i < contributionsList[msg.sender].length; i++) {
+            if (contributionsList[msg.sender][i].currency == address(0))
                 continue;
             // Transfer from
             require(IERC20(contributionsList[msg.sender][i].currency).transferFrom(
-                    address(this), 
+                    address(this),
                     msg.sender,
                     contributionsList[msg.sender][i].amount),
-                    'ERC20 transfer failed!');
+                'ERC20 transfer failed!');
             contributionsList[msg.sender][i].amount = 0;
         }
 
         return true;
     }
 
+    function allowContributionWithdrawals() external returns (bool) {
+        contributionLocking = false;
+        return true;
+    }
+
+    function setPresale(uint256 amountBCY, uint256 tokens) external returns (bool) {
+        return true;
+    }
+
+    function getPresale() external returns (uint256, uint256) {
+        return (0, 0);
+    }
+
     function finishFundraising() external returns (bool) {
         isOngoing = false;
+        return true;
+    }
+
+    function setContributionRules(address rules) external returns (bool) {
         return true;
     }
 }

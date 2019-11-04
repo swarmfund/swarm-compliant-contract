@@ -6,6 +6,8 @@ const {encodeTransfer} = require('../token/utils');
 
 const SwarmPoweredFundraiseMock = artifacts.require('SwarmPoweredFundraiseMock');
 const Erc20Token = artifacts.require('SwarmTokenMock');
+const PassContributionRules = artifacts.require('PassContributionRules');
+const FailContributionRules = artifacts.require('FailContributionRules');
 
 contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authority*/, owner, issuer, contributor, src20]) {
     const label = "mvpworkshop.co";
@@ -29,6 +31,9 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
         this.acceptedToken = await Erc20Token.new(owner, ercTotalSupply, {from: owner});
         this.notAcceptedToken = await Erc20Token.new(owner, ercTotalSupply, {from: owner});
         baseCurrency = this.acceptedToken.address;
+
+        this.passContributionRules = PassContributionRules.new();
+        this.failContributionRules = FailContributionRules.new();
 
         // @TODO should register erc20 tokens to some kind of accepted currency registry
     });
@@ -152,25 +157,168 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
                 "Failed to set total token amount, token price already set");
         });
 
-        it('should not be able to contribute if fundraising did not start');
+        it('should not be able to contribute if fundraising did not start', async function () {
+            const swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new(
+                label,
+                src20,
+                tokenAmount,
+                moment().unix() + 100,
+                moment().unix() + 200,
+                softCap,
+                hardCap,
+                baseCurrency,
+                {from: issuer});
 
-        it('should be able to set hard and soft cap on fundraising deployment');
+            await shouldFail.reverting.withMessage(swarmPoweredFundraiseMock.send(amount, {from: owner}),
+                "Contribution failed: fundraising did not start");
+        });
 
         // Locking contributions
-        it('should be able to withdraw contribution if contributions withdrawal are allowed');
+        it('should be able to withdraw contribution if contributions withdrawal are allowed', async function () {
+            const swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new(
+                label,
+                src20,
+                tokenAmount,
+                startDate,
+                endDate,
+                softCap,
+                hardCap,
+                baseCurrency,
+                {from: issuer});
 
-        it('should be able to put presale amount and presale tokens with seperate functions');
+            const beforeBalance = await swarmPoweredFundraiseMock.getBalanceETH(owner);
 
-        it('should fail if presale amount is larger than hardcap');
+            await swarmPoweredFundraiseMock.allowContributionWithdrawals({from: issuer});
+            await swarmPoweredFundraiseMock.send(amount, {from: owner});
+            await swarmPoweredFundraiseMock.withdrawInvestmentETH({from: owner});
 
-        it('should fail if presale tokens is larger than total amount of tokens');
+            const afterBalance = await swarmPoweredFundraiseMock.getBalanceETH(owner);
 
-        it('should be able to set base currency from accepted currencies');
+            assert.equal(beforeBalance.eq(afterBalance), true);
+        });
 
-        it('should not be able to set base currency from not accepted currencies');
+        it('should be able to put presale amount and presale tokens with seperate functions', async function () {
+            const swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new(
+                label,
+                src20,
+                tokenAmount,
+                startDate,
+                endDate,
+                softCap,
+                hardCap,
+                baseCurrency,
+                {from: issuer});
 
-        it('should pass contribution rules');
+            await swarmPoweredFundraiseMock.setPresale(amount, amount.div(tokenPrice));
 
-        it('should fail contribution rules');
+            const {afterAmount, afterTokens} = await swarmPoweredFundraiseMock.getPresale();
+
+            assert.equal(amount.eq(afterAmount), true);
+            assert.equal(amount.div(tokenPrice).eq(afterTokens), true);
+        });
+
+        it('should fail if presale amount is larger than hardcap', async function () {
+            const swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new(
+                label,
+                src20,
+                tokenAmount,
+                startDate,
+                endDate,
+                softCap,
+                hardCap,
+                baseCurrency,
+                {from: issuer});
+
+            await shouldFail.reverting.withMessage(swarmPoweredFundraiseMock.setPresale(amount, amount.div(tokenPrice)),
+                "Setting presale failed: amount is larger than hardcap");
+        });
+
+        it('should fail if presale tokens is larger than total amount of tokens', async function () {
+            const swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new(
+                label,
+                src20,
+                tokenAmount,
+                startDate,
+                endDate,
+                softCap,
+                hardCap,
+                baseCurrency,
+                {from: issuer});
+
+            await shouldFail.reverting.withMessage(swarmPoweredFundraiseMock.setPresale(amount, amount.div(tokenPrice)),
+                "Setting presale failed: tokens is larger than total token supply");
+        });
+
+        it('should be able to set base currency from accepted currencies', async function () {
+            const swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new(
+                label,
+                src20,
+                tokenAmount,
+                startDate,
+                endDate,
+                softCap,
+                hardCap,
+                this.acceptedToken.address,
+                {from: issuer});
+
+            const baseCurrency = await swarmPoweredFundraiseMock.baseCurrency();
+
+            assert.equal(this.acceptedToken.address, baseCurrency);
+        });
+
+        it('should not be able to set base currency from not accepted currencies', async function () {
+            await shouldFail.reverting.withMessage(SwarmPoweredFundraiseMock.new(
+                label,
+                src20,
+                tokenAmount,
+                startDate,
+                endDate,
+                softCap,
+                hardCap,
+                this.notAcceptedToken.address,
+                {from: issuer}),
+                "Swarm powered fundraising failed to deploy: base currency not accepted")
+        });
+
+        it('should pass contribution rules', async function () {
+            const swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new(
+                label,
+                src20,
+                tokenAmount,
+                startDate,
+                endDate,
+                softCap,
+                hardCap,
+                this.acceptedToken.address,
+                {from: issuer});
+
+            const beforeBalance = await swarmPoweredFundraiseMock.getBalanceETH(owner);
+
+            await swarmPoweredFundraiseMock.setContributionRules(this.passContributionRules.address);
+
+            await swarmPoweredFundraiseMock.send(amount, {from: owner});
+            const afterBalance = await swarmPoweredFundraiseMock.getBalanceETH(owner);
+
+            // check contribution
+            assert.equal(beforeBalance.equal(afterBalance));
+        });
+
+        it('should fail contribution rules', async function () {
+            const swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new(
+                label,
+                src20,
+                tokenAmount,
+                startDate,
+                endDate,
+                softCap,
+                hardCap,
+                this.acceptedToken.address,
+                {from: issuer});
+
+            await swarmPoweredFundraiseMock.setContributionRules(this.failContributionRules.address);
+
+            await shouldFail.reverting.withMessage(this.swarmPoweredFundraiseMock.send(amount, {from:owner}),
+                "Contribution failed: contribution rules failed");
+        });
     });
 });
