@@ -27,60 +27,6 @@ contract('ContributorActions', async function ([_, whitelistManager /*authority*
         this.notAcceptedToken = await Erc20Token.new(owner, ercTotalSupply, {from: owner});
     });
 
-    describe('Fundraising whitelist functionality', () => {
-        it('', {
-            // should be able to whitelist as a issuer/manager
-                // increase total sum per contributor check
-                // increase historical balances only if contrition rule is met check
-                // move contributions to acc contribution if contribution rule are met check
-
-            // new contribution
-                // increase total sum per contributor check
-                // increase historical balances only if contrition rule is met check
-                // move contributions to acc contribution if contribution rule are met check
-
-            // should be able to de-whitelist account
-                // decrease total sum per contributor check
-                // increase hardcap for sum per contributor only if contrition rule is met check
-                // remove contributions from acc contributions
-
-            // new contribution
-                // increase total sum per contributor check
-
-            // cannot whitelist/ de-whitelist after finished/expired/canceled fundraising
-        });
-
-        it('should be able to whitelist as a issuer');
-
-        it('should be able to whitelist as a manager');
-
-        it('should not be able to whitelist as normal account');
-
-        it('should be able for contribution to automatically be moved to accepted contributions if contributor is on whitelist');
-
-        it('should be able to accept contribution if contributor is already on whitelist');
-
-        it('should be able to de-whitelist as a issuer');
-
-        it('should be able to de-whitelist as a manager');
-
-        it('should not be able to de-whitelist as normal account');
-
-        it('should not be able accept contribution if contributor is de-whitelisted');
-
-        it('should not be able to whitelist if fundraising is finished');
-
-        it('should not be able to whitelist if fundraising is expired');
-
-        it('should not be able to whitelist if fundraising is canceled');
-
-        it('should not be able to de-whitelist if fundraising is finished');
-
-        it('should not be able to de-whitelist if fundraising is expired');
-
-        it('should not be able to de-whitelist if fundraising is canceled');
-    });
-
     describe('Claim token functionality', () => {
         it('', async function () {
             //setup
@@ -96,8 +42,6 @@ contract('ContributorActions', async function ([_, whitelistManager /*authority*
                 // ...
 
             // failing
-                // if not whitelisted should fail
-
                 // if acc contribution 0 should fail
                 // if acc contributing > max amount should fail
         });
