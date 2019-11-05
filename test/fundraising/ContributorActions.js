@@ -49,6 +49,36 @@ contract('ContributorActions', async function ([_, whitelistManager /*authority*
 
             // cannot whitelist/ de-whitelist after finished/expired/canceled fundraising
         });
+
+        it('should be able to whitelist as a issuer');
+
+        it('should be able to whitelist as a manager');
+
+        it('should not be able to whitelist as normal account');
+
+        it('should be able for contribution to automatically be moved to accepted contributions if contributor is on whitelist');
+
+        it('should be able to accept contribution if contributor is already on whitelist');
+
+        it('should be able to de-whitelist as a issuer');
+
+        it('should be able to de-whitelist as a manager');
+
+        it('should not be able to de-whitelist as normal account');
+
+        it('should not be able accept contribution if contributor is de-whitelisted');
+
+        it('should not be able to whitelist if fundraising is finished');
+
+        it('should not be able to whitelist if fundraising is expired');
+
+        it('should not be able to whitelist if fundraising is canceled');
+
+        it('should not be able to de-whitelist if fundraising is finished');
+
+        it('should not be able to de-whitelist if fundraising is expired');
+
+        it('should not be able to de-whitelist if fundraising is canceled');
     });
 
     describe('Claim token functionality', () => {
@@ -72,7 +102,14 @@ contract('ContributorActions', async function ([_, whitelistManager /*authority*
                 // if acc contributing > max amount should fail
         });
 
-        it('');
-        it('');
+        it('should be able claim tokens if fundraising has finished');
+
+        it('should not be able claim tokens if fundraising expired');
+
+        it('should not be able claim tokens if fundraising failed');
+
+        it('should not be able claim tokens if accepted contributions are 0');
+
+        it('should not be able claim tokens if contributions do not pass contribution rules');
     });
 });
