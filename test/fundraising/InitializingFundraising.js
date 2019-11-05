@@ -74,7 +74,7 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
             await shouldFail.reverting.withMessage(
                 SwarmPoweredFundraiseMock.new(
                     label,
-                    constants.ZERO_ADDRESS,
+                    constants.ZERO_ADDRESS, // src20
                     tokenAmount,
                     startDate,
                     endDate,
@@ -135,7 +135,7 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
 
             await shouldFail.reverting.withMessage(
                 swarmPoweredFundraiseMock.setTokenPriceBCY(tokenPrice, {from: issuer}),
-                "Failed to set token price, total token amount already set");
+                "Failed to set token price: total token amount already set");
         });
 
         it('should not allow token issuer to set total amount of src20 tokens if price is already set', async function () {
@@ -154,7 +154,7 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
 
             await shouldFail.reverting.withMessage(
                 swarmPoweredFundraiseMock.setTotalTokenAmount(totalTokenAmount, {from: issuer}),
-                "Failed to set total token amount, token price already set");
+                "Failed to set total token amount: token price already set");
         });
 
         it('should not be able to contribute if fundraising did not start', async function () {
@@ -190,14 +190,14 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
 
             await swarmPoweredFundraiseMock.allowContributionWithdrawals({from: issuer});
             await swarmPoweredFundraiseMock.send(amount, {from: owner});
-            await swarmPoweredFundraiseMock.withdrawInvestmentETH({from: owner});
+            await swarmPoweredFundraiseMock.withdrawContributionETH({from: owner});
 
             const afterBalance = await swarmPoweredFundraiseMock.getBalanceETH(owner);
 
             assert.equal(beforeBalance.eq(afterBalance), true);
         });
 
-        it('should be able to put presale amount and presale tokens with seperate functions', async function () {
+        it('should be able to put presale amount and presale tokens with specialized functions', async function () {
             const swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new(
                 label,
                 src20,
@@ -245,7 +245,7 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
                 baseCurrency,
                 {from: issuer});
 
-            await shouldFail.reverting.withMessage(swarmPoweredFundraiseMock.setPresale(amount, amount.div(tokenPrice)),
+            await shouldFail.reverting.withMessage(swarmPoweredFundraiseMock.setPresale(hardCap.add(1), hardCap.add(1).div(tokenPrice)),
                 "Setting presale failed: tokens is larger than total token supply");
         });
 

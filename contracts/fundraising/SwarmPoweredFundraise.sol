@@ -59,11 +59,14 @@ contract SwarmPoweredFundraise {
 
     function() external payable {
         require(isOngoing, 'Fundraise is not oingoing anymore!');
+
         sequence++;
+
         contribution memory c;
         c.currency = address(0);
         c.amount = msg.value;
         c.sequence = sequence;
+
         contributionsList[msg.sender].push(c);
     }
 
@@ -83,15 +86,17 @@ contract SwarmPoweredFundraise {
 
     function contribute(address erc20, uint256 amount) public returns (bool) {
         require(isOngoing, 'Fundraise is not oingoing anymore!');
-
         require(IERC20(erc20).transferFrom(msg.sender, address(this), amount), 'ERC20 transfer failed!');
 
         sequence++;
+
         contribution memory c;
         c.currency = erc20;
         c.amount = amount;
         c.sequence = sequence;
+
         contributionsList[msg.sender].push(c);
+
         return true;
     }
 

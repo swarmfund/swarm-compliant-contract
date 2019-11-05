@@ -17,7 +17,8 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
   const maxAmount = new BN(100);
 
   beforeEach(async function () {
-    this.swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new({from: owner}); // @TODO change owner to be token issuer...
+    this.swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new({from: owner});
+    // @TODO change owner to be token issuer...
 
     this.swarmPoweredFundraiseFinished = await SwarmPoweredFundraiseFinished.new({from: owner});
     this.swarmPoweredFundraiseCanceled = await SwarmPoweredFundraiseCanceled.new({from: owner});
@@ -25,6 +26,9 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
 
     this.acceptedToken = await Erc20Token.new(owner, ercTotalSupply, {from: owner});
     this.notAcceptedToken = await Erc20Token.new(owner, ercTotalSupply, {from: owner});
+
+    // @TODO increase total sum per contributor checks
+    // @TODO decrease total sum per contributor check
   });
 
   describe('Handling incoming contributions', function () {
