@@ -1,6 +1,6 @@
 {
   "name": "swarm-fundraising-contract",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Fundraising Platform Solidity Contracts",
   "scripts": {},
   "private": true,
