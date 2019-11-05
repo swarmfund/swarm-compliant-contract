@@ -4,48 +4,73 @@ const helpers = require('./helpers');
 
 const SRC20Registry = artifacts.require('SRC20RegistryMock');
 const SRC20Factory = artifacts.require('SRC20Factory');
-const SRC20 = artifacts.require('SRC20');
+const SRC20 = artifacts.require('SRC20Mock');
 const SwarmTokenMock = artifacts.require('SwarmTokenMock');
+const SRC20Roles = artifacts.require('SRC20Roles');
+const Featured = artifacts.require('FeaturedMock');
+const AssetRegistry = artifacts.require('AssetRegistry');
+const SetRateMinter = artifacts.require('SetRateMinter');
 
-contract('SRC20Factory', function ([_, owner, account0, account1]) {
+contract('SRC20Factory', function ([_, owner, account0, account1, account2, account3]) {
   const kyaHash = crypto.createHash('sha256').update(constants.ZERO_ADDRESS).digest();
   const kyaUrl = 'https://www.mvpworkshop.co';
-  const swmTotalSupply = new BN(1000000).mul(new BN(10).pow(new BN(36)));
-  const srcTotalSupply = new BN(10000);
+  const swmTotalSupply = new BN(10000000000).mul(new BN(10).pow(new BN(36)));
+  const srcTotalSupply = new BN(0);
   const features = 0x00;
   const SRC20_DECIMALS = new BN(8); // test with decimals diff
   const SWM_DECIMALS = new BN(18);
+  const maxSrcTotalSupply = new BN(100000000000000).mul(new BN(10).pow(SRC20_DECIMALS));
+  const SWM_PRICE = 100;
+  const NAV = 1000;
 
   beforeEach(async function () {
     this.swarmTokenMock = await SwarmTokenMock.new(account0, swmTotalSupply, {from: owner});
     this.registry = await SRC20Registry.new(this.swarmTokenMock.address, {from: owner});
     this.factory = await SRC20Factory.new(this.registry.address, {from: owner});
-
     await this.registry.addFactory(this.factory.address, {from: owner});
 
+    this.assetRegistry = await AssetRegistry.new(this.factory.address, {from: owner});
+
+    this.setRateMinter = await SetRateMinter.new(this.registry.address, {from: owner});
+    this.registry.addMinter(this.setRateMinter.address, {from: owner});
+
+    this.roles = await SRC20Roles.new(owner, this.registry.address, constants.ZERO_ADDRESS, {from: owner});
+    this.feature = await Featured.new(owner, features, {from: owner});
+
     const tx = await this.factory.create(
-      account0,
-      'SRC20 token',
-      'SRC',
-      SRC20_DECIMALS,
-      kyaHash,
-      kyaUrl,
-      constants.ZERO_ADDRESS,
-      features,
-      srcTotalSupply,
+        'SRC20 token',
+        'SRC',
+        SRC20_DECIMALS,
+        maxSrcTotalSupply,
+        kyaHash,
+        kyaUrl,
+        NAV,
+        [
+          account0,
+          constants.ZERO_ADDRESS,
+          constants.ZERO_ADDRESS,
+          this.roles.address,
+          this.feature.address,
+          this.assetRegistry.address,
+          this.setRateMinter.address
+        ],
       {from: owner}
     );
 
     this.unregisteredToken = await SRC20.new(
-      account0,
-      'SRC20 token',
-      'SRC',
-      new BN(18),
-      kyaHash,
-      kyaUrl,
-      constants.ZERO_ADDRESS,
-      features,
-      srcTotalSupply,
+        'SRC20 token',
+        'SRC',
+        SRC20_DECIMALS,
+        maxSrcTotalSupply,
+        [
+          account0,
+          constants.ZERO_ADDRESS,
+          constants.ZERO_ADDRESS,
+          this.roles.address,
+          this.feature.address,
+          this.assetRegistry.address
+        ],
+        srcTotalSupply,
       {from: owner}
     );
 
@@ -58,7 +83,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
 
   describe('Keeping SRC20 tokens in registry', function () {
     it('should allow only factory to register tokens', async function () {
-      await shouldFail.reverting.withMessage(this.registry.put(account0, account1, {from: owner}),
+      await shouldFail.reverting.withMessage(this.registry.put(account0, account1, account2, account3, {from: owner}),
         "factory not registered"
       );
     });
@@ -96,8 +121,8 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
     it('should not allow any management operations for unregistered SRC20 token', async function () {
       const value = new BN(100);
 
-      await shouldFail.reverting.withMessage(this.registry.mintSupply(this.unregisteredToken.address, account0, value, value, {from: owner}),
-        'SRC20 token contract not registered');
+      await shouldFail.reverting.withMessage(this.setRateMinter.mintSupply(this.unregisteredToken.address, account0, value, value, {from: owner}),
+        'Caller not token minter.');
 
       await shouldFail.reverting.withMessage(this.registry.renounceManagement(this.unregisteredToken.address, {from: owner}),
         'SRC20 token contract not registered');
@@ -107,11 +132,16 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       const tokenOwner = account0;
       const value = new BN(100);
 
-      await shouldFail.reverting.withMessage(this.registry.incStake(this.tokenAddress, tokenOwner, value, {from: account1}),
-        'caller not token owner');
+      await shouldFail.reverting.withMessage(this.registry.increaseSupply(this.tokenAddress, tokenOwner, value, {from: account1}),
+        'Caller not token owner.');
+    });
 
-      await shouldFail.reverting.withMessage(this.registry.decStake(this.tokenAddress, tokenOwner, value, {from: account1}),
-        'caller not token owner');
+    it('should not allow any token owner operations to non token owner caller', async function () {
+      const tokenOwner = account0;
+      const value = new BN(100);
+
+      await shouldFail.reverting.withMessage(this.registry.decreaseSupply(this.tokenAddress, tokenOwner, value, {from: account1}),
+          'Caller not token owner.');
     });
 
     it('should mint requested SRC20 supply correctly', async function () {
@@ -127,7 +157,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       const startingStake = await this.registry.getStake(this.token.address);
 
       await this.swarmTokenMock.approve(this.registry.address, weiSWMValue, {from: account0});
-      await this.registry.mintSupply(this.token.address, account0, weiSWMValue, weiSRC20Value, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSWMValue, weiSRC20Value, {from: owner});
 
       const erc20balance = await this.swarmTokenMock.balanceOf(account0);
       assert.equal((startingErc20balance.sub(weiSWMValue)).eq(erc20balance), true);
@@ -149,7 +179,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       const weiSRC20Value = src20Value.mul(new BN(10).pow(SRC20_DECIMALS));
 
       await this.swarmTokenMock.approve(this.registry.address, weiSWMValue, {from: account0});
-      await this.registry.mintSupply(this.token.address, account0, weiSWMValue, weiSRC20Value, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSWMValue, weiSRC20Value, {from: owner});
 
       const startingErc20balance = await this.swarmTokenMock.balanceOf(account0);
       const startingErc20contractBalance = await this.swarmTokenMock.balanceOf(this.registry.address);
@@ -157,12 +187,11 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       const startingScr20balance = await this.token.balanceOf(account0);
       const startingStake = await this.registry.getStake(this.token.address);
 
-
       await this.swarmTokenMock.approve(this.registry.address, weiSWMValue, {from: account0});
-      await this.registry.incStake(this.token.address, account0, weiSWMValue, {from: account0});
+      const incStakeSrcValue = helpers.utils.calcTokens(weiSRC20Value, weiSWMValue, weiSWMValue);
+      await this.registry.increaseSupply(this.token.address, account0, incStakeSrcValue, {from: account0});
 
       const supply = await this.token.totalSupply();
-      const incStakeSrcValue = helpers.utils.calcTokens(weiSRC20Value, weiSWMValue, weiSWMValue);
       assert.equal(srcTotalSupply.add(weiSRC20Value).add(incStakeSrcValue).eq(supply), true);
 
       const erc20balance = await this.swarmTokenMock.balanceOf(account0);
@@ -184,7 +213,7 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       const weiSwmValueStake = new BN(50).mul(new BN(10).pow(SWM_DECIMALS));
 
       await this.swarmTokenMock.approve(this.registry.address, weiSwmValue, {from: account0});
-      await this.registry.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
 
       const startingSwmBalance = await this.swarmTokenMock.balanceOf(account0);
       const startingSwmContractBalance = await this.swarmTokenMock.balanceOf(this.registry.address);
@@ -192,10 +221,10 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       const startingScr20balance = await this.token.balanceOf(account0);
       const startingStake = await this.registry.getStake(this.token.address);
 
-      await this.registry.decStake(this.token.address, account0, weiSwmValueStake, {from: account0});
+      const unstakedSrcValue = helpers.utils.calcTokens(weiSrcValue, weiSwmValue, weiSwmValueStake);
+      await this.registry.decreaseSupply(this.token.address, account0, unstakedSrcValue, {from: account0});
 
       const supply = await this.token.totalSupply();
-      const unstakedSrcValue = helpers.utils.calcTokens(weiSrcValue, weiSwmValue, weiSwmValueStake);
       assert.equal(srcTotalSupply.add(weiSrcValue).sub(unstakedSrcValue).eq(supply), true);
 
       const swmbalance = await this.swarmTokenMock.balanceOf(account0);
@@ -216,11 +245,13 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       const weiSwmValue = new BN(100).mul(new BN(10).pow(SWM_DECIMALS));
       const weiSwmValueStake = new BN(50).mul(new BN(10).pow(SWM_DECIMALS));
 
+      const stakedTokens = helpers.utils.calcTokens(weiSrcValue, weiSwmValue, weiSwmValueStake);
+
       await this.swarmTokenMock.approve(this.registry.address, weiSwmValue, {from: account0});
-      await this.registry.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
 
       await this.swarmTokenMock.approve(this.registry.address, weiSwmValueStake, {from: account0});
-      await this.registry.incStake(this.token.address, account0, weiSwmValueStake, {from: account0});
+      await this.registry.increaseSupply(this.token.address, account0, stakedTokens, {from: account0});
 
       const startingSwmBalance = await this.swarmTokenMock.balanceOf(account0);
       const startingSwmContractBalance = await this.swarmTokenMock.balanceOf(this.registry.address);
@@ -229,10 +260,9 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       const startingStake = await this.registry.getStake(this.token.address);
 
       await this.swarmTokenMock.approve(this.registry.address, weiSwmValueStake, {from: account0});
-      await this.registry.incStake(this.token.address, account0, weiSwmValueStake, {from: account0});
+      await this.registry.increaseSupply(this.token.address, account0, stakedTokens, {from: account0});
 
       const supply = await this.token.totalSupply();
-      const stakedTokens = helpers.utils.calcTokens(weiSrcValue, weiSwmValue, weiSwmValueStake);
       assert.equal(srcTotalSupply.add(weiSrcValue).add(stakedTokens).add(stakedTokens).eq(supply), true);
 
       const swmBalance = await this.swarmTokenMock.balanceOf(account0);
@@ -248,47 +278,6 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       assert.equal(startingStake.add(weiSwmValueStake).eq(stake), true)
     });
 
-    it('should follow new rate stake increase', async function () {
-      const two = new BN(2);
-
-      const weiSrcValue = new BN(200).mul(new BN(10).pow(SRC20_DECIMALS));
-      const newWeiSrcValue = weiSrcValue.mul(two);
-
-      const weiSwmValue = new BN(100).mul(new BN(10).pow(SWM_DECIMALS));
-      const weiSwmValueStake = new BN(50).mul(new BN(10).pow(SWM_DECIMALS));
-
-      await this.swarmTokenMock.approve(this.registry.address, weiSwmValue, {from: account0});
-      await this.registry.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
-
-      await this.swarmTokenMock.approve(this.registry.address, weiSwmValue, {from: account0});
-      await this.registry.mintSupply(this.token.address, account0, weiSwmValue, newWeiSrcValue, {from: owner});
-
-      const startingSwmBalance = await this.swarmTokenMock.balanceOf(account0);
-      const startingSwmContractBalance = await this.swarmTokenMock.balanceOf(this.registry.address);
-
-      const startingScr20balance = await this.token.balanceOf(account0);
-      const startingStake = await this.registry.getStake(this.token.address);
-
-      await this.swarmTokenMock.approve(this.registry.address, weiSwmValueStake, {from: account0});
-      await this.registry.incStake(this.token.address, account0, weiSwmValueStake, {from: account0});
-
-      const supply = await this.token.totalSupply();
-      const incSrcStakeValue = helpers.utils.calcTokens(newWeiSrcValue, weiSwmValue, weiSwmValueStake);
-      assert.equal((srcTotalSupply.add(weiSrcValue).add(newWeiSrcValue).add(incSrcStakeValue)).eq(supply), true);
-
-      const erc20balance = await this.swarmTokenMock.balanceOf(account0);
-      assert.equal(startingSwmBalance.sub(weiSwmValueStake).eq(erc20balance), true);
-
-      const erc20contractBalance = await this.swarmTokenMock.balanceOf(this.registry.address);
-      assert.equal(startingSwmContractBalance.add(weiSwmValueStake).eq(erc20contractBalance), true);
-
-      const src20balance = await this.token.balanceOf(account0);
-      assert.equal(startingScr20balance.add(incSrcStakeValue).eq(src20balance), true);
-
-      const stake = await this.registry.getStake(this.token.address);
-      assert.equal(startingStake.add(weiSwmValueStake).eq(stake), true);
-    });
-    //
     it('should follow new rate stake decrease', async function () {
       const weiSrcValue = new BN(200).mul(new BN(10).pow(SRC20_DECIMALS));
       const weiSwmValue = new BN(100).mul(new BN(10).pow(SWM_DECIMALS));
@@ -298,10 +287,10 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       const newWeiSrcValue = weiSrcValue.mul(two);
 
       await this.swarmTokenMock.approve(this.registry.address, weiSwmValue, {from: account0});
-      await this.registry.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSwmValue, weiSrcValue, {from: owner});
 
       await this.swarmTokenMock.approve(this.registry.address, weiSwmValue, {from: account0});
-      await this.registry.mintSupply(this.token.address, account0, weiSwmValue, newWeiSrcValue, {from: owner});
+      await this.setRateMinter.mintSupply(this.token.address, account0, weiSwmValue, newWeiSrcValue, {from: owner});
 
       const startingSwmBalance = await this.swarmTokenMock.balanceOf(account0);
       const startingSwmContractBalance = await this.swarmTokenMock.balanceOf(this.registry.address);
@@ -309,10 +298,10 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
       const startingScr20balance = await this.token.balanceOf(account0);
       const startingStake = await this.registry.getStake(this.token.address);
 
-      await this.registry.decStake(this.token.address, account0, weiSwmValueStake, {from: account0});
+      const decSrcStakeValue = helpers.utils.calcTokens(weiSrcValue.add(newWeiSrcValue), weiSwmValue.add(weiSwmValue), weiSwmValueStake);
+      await this.registry.decreaseSupply(this.token.address, account0, decSrcStakeValue, {from: account0});
 
       const supply = await this.token.totalSupply();
-      const decSrcStakeValue = helpers.utils.calcTokens(newWeiSrcValue, weiSwmValue, weiSwmValueStake);
       assert.equal(srcTotalSupply.add(weiSrcValue).add(newWeiSrcValue).sub(decSrcStakeValue).eq(supply), true);
 
       const erc20balance = await this.swarmTokenMock.balanceOf(account0);
@@ -341,34 +330,24 @@ contract('SRC20Factory', function ([_, owner, account0, account1]) {
     it('should not allow any management operations for unregistered SRC20 token', async function () {
       const value = new BN(100);
 
-      await shouldFail.reverting.withMessage(this.registry.mintSupply(this.unregisteredToken.address, account0, value, value, {from: owner}),
-        'SRC20 token contract not registered');
+      await shouldFail.reverting.withMessage(this.setRateMinter.mintSupply(this.unregisteredToken.address, account0, value, value, {from: owner}),
+        'Caller not token minter.');
 
       await shouldFail.reverting.withMessage(this.registry.renounceManagement(this.unregisteredToken.address, {from: owner}),
         'SRC20 token contract not registered');
     });
 
-    it('should not allow any token owner operations to non token owner caller', async function () {
-      const tokenOwner = account0;
-      const value = new BN(100);
-
-      await shouldFail.reverting.withMessage(this.registry.incStake(this.tokenAddress, tokenOwner, value, {from: account1}),
-        'caller not token owner');
-
-      await shouldFail.reverting.withMessage(this.registry.decStake(this.tokenAddress, tokenOwner, value, {from: account1}),
-        'caller not token owner');
-    });
-
     it('should be able to transfer management to another manager contract', async function () {
       await this.registry.transferManagement(this.token.address, account0, {from: owner});
 
-      const manager = await this.token.manager();
+      const manager = await this.roles.manager();
       assert.equal(account0 === manager, true);
     });
+
     it('should be able to renounce management', async function () {
       await this.registry.renounceManagement(this.token.address, {from: owner});
 
-      const manager = await this.token.manager();
+      const manager = await this.roles.manager();
       assert.equal(manager === constants.ZERO_ADDRESS, true);
     });
   });

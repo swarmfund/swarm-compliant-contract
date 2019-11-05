@@ -4,125 +4,155 @@ import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
 import "./SRC20Detailed.sol";
-import "./ISRC20.sol";
-import "./ISRC20Owned.sol";
-import "./ISRC20Managed.sol";
-import "./Featured.sol";
-import "./AuthorityRole.sol";
-import "./Freezable.sol";
-import "./DelegateRole.sol";
-import "../rules/ITransferRestriction.sol";
-import "./Managed.sol";
+import "../interfaces/ISRC20.sol";
+import "../interfaces/ISRC20Managed.sol";
+import "../interfaces/ITransferRules.sol";
+import "../interfaces/IFeatured.sol";
+import "../interfaces/ISRC20Roles.sol";
+import "../interfaces/ISRC20.sol";
+import "../interfaces/ITransferRestrictions.sol";
+import "../interfaces/IAssetRegistry.sol";
 
 
 /**
  * @title SRC20 contract
  * @dev Base SRC20 contract.
  */
-contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
-        AuthorityRole, DelegateRole, Freezable, Ownable, Managed {
+contract SRC20 is ISRC20, ISRC20Managed, SRC20Detailed, Ownable {
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
-    mapping(address => uint256) private _balances;
-    mapping(address => mapping(address => uint256)) private _allowances;
-    uint256 private _totalSupply;
+    mapping(address => uint256) public _balances;
+    mapping(address => mapping(address => uint256)) public _allowances;
+    uint256 public _totalSupply;
+    uint256 public _maxTotalSupply;
 
     mapping(address => uint256) private _nonce;
 
-    struct KYA {
-        bytes32 kyaHash;
-        string kyaUrl;
-    }
+    ISRC20Roles public _roles;
+    IFeatured public _features;
 
-    KYA private _kya;
+    IAssetRegistry public _assetRegistry;
 
     /**
      * @description Configured contract implementing token restriction(s).
      * If set, transferToken will consult this contract should transfer
      * be allowed after successful authorization signature check.
      */
-    ITransferRestriction private _restrictions;
+    ITransferRestrictions public _restrictions;
 
+    /**
+     * @description Configured contract implementing token rule(s).
+     * If set, transfer will consult this contract should transfer
+     * be allowed after successful authorization signature check.
+     * And call doTransfer() in order for rules to decide where fund
+     * should end up.
+     */
+    ITransferRules public _rules;
+
+    modifier onlyAuthority() {
+        require(_roles.isAuthority(msg.sender), "Caller not authority");
+        _;
+    }
+
+    modifier onlyDelegate() {
+        require(_roles.isDelegate(msg.sender), "Caller not delegate");
+        _;
+    }
+
+    modifier onlyManager() {
+        require(_roles.isManager(msg.sender), "Caller not manager");
+        _;
+    }
+
+    modifier enabled(uint8 feature) {
+        require(_features.isEnabled(feature), "Token feature is not enabled");
+        _;
+    }
 
     // Constructors
     constructor(
-        address owner,
         string memory name,
         string memory symbol,
         uint8 decimals,
-        bytes32 kyaHash,
-        string memory kyaUrl,
-        address restrictions,
-        uint8 features,
-        uint256 totalSupply
+        uint256 maxTotalSupply,
+        address[] memory addressList
+                    //  addressList[0] tokenOwner,
+                    //  addressList[1] restrictions,
+                    //  addressList[2] rules,
+                    //  addressList[3] roles,
+                    //  addressList[4] featured,
+                    //  addressList[5] assetRegistry
     )
     SRC20Detailed(name, symbol, decimals)
-    Featured(features)
     public
     {
-        _transferOwnership(owner);
+        _assetRegistry = IAssetRegistry(addressList[5]);
+        _transferOwnership(addressList[0]);
 
-        _totalSupply = totalSupply;
-        _balances[owner] = _totalSupply;
-        _updateKYA(kyaHash, kyaUrl, restrictions);
+        _maxTotalSupply = maxTotalSupply;
+        _updateRestrictionsAndRules(addressList[1], addressList[2]);
+
+        _roles = ISRC20Roles(addressList[3]);
+        _features = IFeatured(addressList[4]);
     }
 
-    // KYA management
     /**
-     * @dev Update KYA document, sending document hash and url. Hash is
-     * SHA256 hash of document content.
-     * Emits KYAUpdated event.
-     * Allowed to be called by owner or delete accounts.
+     * @dev This method is intended to be executed by TransferRules contract when doTransfer is called in transfer
+     * and transferFrom methods to check where funds should go.
      *
-     * @param kyaHash SHA256 hash of KYA document.
-     * @param kyaUrl URL of token's KYA document (ipfs, http, etc.).
+     * @param from The address to transfer from.
+     * @param to The address to send tokens to.
+     * @param value The amount of tokens to send.
+     */
+    function executeTransfer(address from, address to, uint256 value) external onlyAuthority returns (bool) {
+        _transfer(from, to, value);
+        return true;
+    }
+
+    /**
+     * Update the rules and restrictions settings for transfers.
+     * Only a Delegate can call this role
+     * 
      * @param restrictions address implementing on-chain restriction checks
      * or address(0) if no rules should be checked on chain.
+     * @param rules address implementing on-chain restriction checks
      * @return True on success.
      */
-    function updateKYA(bytes32 kyaHash, string calldata kyaUrl, address restrictions) external onlyOwnerOrDelegate returns (bool) {
-        return _updateKYA(kyaHash, kyaUrl, restrictions);
+    function updateRestrictionsAndRules(address restrictions, address rules) external onlyDelegate returns (bool) {
+        return _updateRestrictionsAndRules(restrictions, rules);
     }
 
     /**
-     * @dev Retrieve token's KYA document's hash and url.
+     * @dev Internal function to update the restrictions and rules contracts.
+     * Emits RestrictionsAndRulesUpdated event.
      *
-     * @return Hash of KYA document.
-     * @return URL of KYA document.
-     */
-    function getKYA() external view returns (bytes32, string memory, address) {
-        return (_kya.kyaHash, _kya.kyaUrl, address(_restrictions));
-    }
-
-    /**
-     * @dev Internal function to change KYA hash and url.
-     * Emits KYAUpdated event.
-     *
-     * @param kyaHash SHA256 hash of KYA document.
-     * @param kyaUrl URL of token's KYA document (ipfs, http, etc.).
      * @param restrictions address implementing on-chain restriction checks
-     * or address(0) if no rules should be checked on chain.
+     *                     or address(0) if no rules should be checked on chain.
+     * @param rules address implementing on-chain restriction checks
      * @return True on success.
      */
-    function _updateKYA(bytes32 kyaHash, string memory kyaUrl, address restrictions) internal returns (bool) {
-        _kya.kyaHash = kyaHash;
-        _kya.kyaUrl = kyaUrl;
-        _restrictions = ITransferRestriction(restrictions);
+    function _updateRestrictionsAndRules(address restrictions, address rules) internal returns (bool) {
 
-        emit KYAUpdated(kyaHash, kyaUrl, restrictions);
+        _restrictions = ITransferRestrictions(restrictions);
+        _rules = ITransferRules(rules);
 
+        if (rules != address(0)) {
+            require(_rules.setSRC(address(this)), "SRC20 contract already set in transfer rules");
+        }
+
+        emit RestrictionsAndRulesUpdated(restrictions, rules);
         return true;
     }
 
     /**
      * @dev Transfer token to specified address. Caller needs to provide authorization
      * signature obtained from MAP API, signed by authority accepted by token issuer.
-     * Emits Transfer event. 
+     * Emits Transfer event.
      *
      * @param to The address to send tokens to.
      * @param value The amount of tokens to send.
-     * @param nonce Token transfer nonce, can not repeat nance for subsequent
+     * @param nonce Token transfer nonce, can not repeat nonce for subsequent
      * token transfers.
      * @param expirationTime Timestamp until transfer request is valid.
      * @param hash Hash of transfer params (kyaHash, from, to, value, nonce, expirationTime).
@@ -189,7 +219,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     */
     function transferTokenForced(address from, address to, uint256 value)
         external
-        enabled(Featured.ForceTransfer)
+        enabled(_features.ForceTransfer())
         onlyOwner
         returns (bool)
     {
@@ -201,7 +231,7 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     /**
      * @dev Returns next nonce expected by transfer functions that require it.
      * After any successful transfer, nonce will be incremented.
-     * 
+     *
      * @return Nonce for next transfer function.
      */
     function getTransferNonce() external view returns (uint256) {
@@ -217,153 +247,17 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         return _nonce[account];
     }
 
-
-    // Authority management
-    /**
-     * @dev Check if specified account is authority. Authorities are accounts
-     * that can sign token transfer request, usually after off-chain token restriction
-     * checks.
-     * 
-     * @return True if specified account is authority account.
-     */
-    function isAuthority(address account) external view returns (bool) {
-        return _hasAuthority(account);
-    }
-
-    /**
-     * @dev Add account to token authorities list.
-     * Emits AuthorityAdded event.
-     */
-    function addAuthority(address account) external onlyOwner {
-        _addAuthority(account);
-    }
-
-    /**
-     * @dev Removes account from token authorities list.
-     * Emits AuthorityRemoved event.
-     */
-    function removeAuthority(address account) external onlyOwner {
-        _removeAuthority(account);
-    }
-
-    // Delegate management
-    /**
-     * @dev Check if specified account is delegate. Delegate is accounts
-     * allowed to do certain operations on contract, apart from owner.
-     *
-     * @return True if specified account is delegate account.
-     */
-    function isDelegate(address account) external view returns (bool) {
-        return _hasDelegate(account);
-    }
-
-    /**
-     * @dev Add account to token delegates list.
-     * Emits DelegateAdded event.
-     */
-    function addDelegate(address account) external onlyOwner {
-        _addDelegate(account);
-    }
-
-    /**
-     * @dev Removes account from token delegates list.
-     * Emits DelegateRemoved event.
-     */
-    function removeDelegate(address account) external onlyOwner {
-        _removeDelegate(account);
-    }
-
-    /**
-     * @dev Throws if caller by other than owner or delegate.
-     */
-    modifier onlyOwnerOrDelegate() {
-        require(isOwner() || _hasDelegate(msg.sender), "Not Owner or Delegate");
-        _;
-    }
-
-    // Account and token freezing management
-    /**
-     * @dev Check if specified account is frozen. Token issuer can
-     * freeze any account at any time and stop accounts making
-     * transfers.
-     *
-     * @return True if account is frozen.
-     */
-    function isFrozen(address account) external view returns (bool) {
-        return _isFrozen(account);
-    }
-
-    /**
-     * @dev Freezes account.
-     * Emits AccountFrozen event.
-     */
-    function freezeAccount(address account)
-        external
-        enabled(Featured.Freezing)
-        onlyOwner
-    {
-        _freezeAccount(account);
-    }
-
-    /**
-     * @dev Unfreezes account.
-     * Emits AccountUnfrozen event.
-     */
-    function unfreezeAccount(address account)
-        external
-        enabled(Featured.Freezing)
-        onlyOwner
-    {
-        _unfreezeAccount(account);
-    }
-
-    /**
-     * @dev Check if token is frozen. Token issuer can freeze token
-     * at any time and stop all accounts from making transfers. When
-     * token is frozen, isFrozen(account) returns true for every
-     * account.
-     *
-     * @return True if token is frozen.
-     */
-    function isTokenFrozen() external view returns (bool) {
-        return _isTokenFrozen();
-    }
-
-    /**
-     * @dev Freezes token.
-     * Emits TokenFrozen event.
-     */
-    function freezeToken()
-        external
-        enabled(Featured.Freezing)
-        onlyOwner
-    {
-        _freezeToken();
-    }
-
-    /**
-     * @dev Freezes token.
-     * Emits TokenUnfrozen event.
-     */
-    function unfreezeToken()
-        external
-        enabled(Featured.Freezing)
-        onlyOwner
-    {
-        _unfreezeToken();
-    }
-
     // Account token burning management
     /**
      * @dev Function that burns an amount of the token of a given
      * account.
      * Emits Transfer event, with to address set to zero.
-     * 
+     *
      * @return True on success.
      */
     function burnAccount(address account, uint256 value)
         external
-        enabled(Featured.AccountBurning)
+        enabled(_features.AccountBurning())
         onlyOwner
         returns (bool)
     {
@@ -441,6 +335,32 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         return true;
     }
 
+    function transfer(address to, uint256 value) external returns (bool) {
+        require(_features.checkTransfer(msg.sender, to), "Feature transfer check");
+
+        if (_rules != ITransferRules(0)) {
+            require(_rules.doTransfer(msg.sender, to, value), "Transfer failed");
+        } else {
+            _transfer(msg.sender, to, value);
+        }
+
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 value) public returns (bool) {
+        require(_features.checkTransfer(from, to), "Feature transfer check");
+
+        if (_rules != ITransferRules(0)) {
+            _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
+            require(_rules.doTransfer(from, to, value), "Transfer failed");
+        } else {
+            _approve(from, msg.sender, _allowances[from][msg.sender].sub(value));
+            _transfer(from, to, value);
+        }
+
+        return true;
+    }
+
     /**
      * @dev Atomically increase approved tokens to the spender on behalf of msg.sender.
      *
@@ -490,19 +410,22 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
     )
         internal returns (bool)
     {
-        require(_isFrozen(from) == false && _isFrozen(to) == false, "transferToken frozen");
-        require(now <= expirationTime, "transferToken params expired");
-        require(nonce == _nonce[from], "transferToken params wrong nonce");
-        require(
-            keccak256(abi.encodePacked(_kya.kyaHash, from, to, value, nonce, expirationTime)) == hash,
-            "transferToken params bad hash"
-        );
-        require(_hasAuthority(hash.toEthSignedMessageHash().recover(signature)), "transferToken params not authority");
-
-        if (_restrictions != ITransferRestriction(0)) {
-            require(_restrictions.authorize(address(this), from, to, value), "transferToken restrictions failed");
+        if (address(_restrictions) != address(0)) {
+            require(_restrictions.authorize(from, to, value), "transferToken restrictions failed");
         }
 
+        require(now <= expirationTime, "transferToken params expired");
+        require(nonce == _nonce[from], "transferToken params wrong nonce");
+
+        (bytes32 kyaHash, string memory kyaUrl) = _assetRegistry.getKYA(address(this));
+
+        require(
+            keccak256(abi.encodePacked(kyaHash, from, to, value, nonce, expirationTime)) == hash,
+            "transferToken params bad hash"
+        );
+        require(_roles.isAuthority(hash.toEthSignedMessageHash().recover(signature)), "transferToken params not authority");
+
+        require(_features.checkTransfer(from, to), "Feature transfer check");
         _transfer(from, to, value);
 
         return true;
@@ -515,12 +438,12 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
      * @param value The amount to be transferred.
      */
     function _transfer(address from, address to, uint256 value) internal {
-        require(to != address(0));
+        require(to != address(0), "Recipient is zero address");
 
         _balances[from] = _balances[from].sub(value);
         _balances[to] = _balances[to].add(value);
 
-        _nonce[from]++; // no need for safe math here
+        _nonce[from]++;
 
         emit Transfer(from, to, value);
     }
@@ -553,6 +476,8 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         require(account != address(0), 'minting to zero address');
 
         _totalSupply = _totalSupply.add(value);
+        require(_totalSupply <= _maxTotalSupply || _maxTotalSupply == 0, 'trying to mint too many tokens!');
+
         _balances[account] = _balances[account].add(value);
 
         emit Transfer(address(0), account, value);
@@ -577,5 +502,57 @@ contract SRC20 is ISRC20, ISRC20Owned, ISRC20Managed, SRC20Detailed, Featured,
         _allowances[owner][spender] = value;
 
         emit Approval(owner, spender, value);
+    }
+
+    /**
+     * Perform multiple token transfers from the token owner's address.
+     * The tokens should already be minted. If this function is to be called by
+     * an actor other than the owner (a delegate), the owner has to call approve()
+     * first to set up the delegate's allowance.
+     *
+     * @param _addresses an array of addresses to transfer to
+     * @param _values an array of values
+     * @return True on success
+     */
+    function bulkTransfer (
+        address[] calldata _addresses, uint256[] calldata _values) external onlyDelegate returns (bool) {
+        require(_addresses.length == _values.length, "Input dataset length mismatch");
+
+        uint256 count = _addresses.length;
+        for (uint256 i = 0; i < count; i++) {
+            address to = _addresses[i];
+            uint256 value = _values[i];
+            _approve(owner(), msg.sender, _allowances[owner()][msg.sender].sub(value));
+            _transfer(owner(), to, value);
+        }
+
+        return true;
+    }
+
+    /**
+     * Perform multiple token transfers from the token owner's address.
+     * The tokens should already be minted. If this function is to be called by
+     * an actor other than the owner (a delegate), the owner has to call approve()
+     * first to set up the delegate's allowance.
+     *
+     * Data needs to be packed correctly before calling this function.
+     *
+     * @param _lotSize number of tokens in the lot
+     * @param _transfers an array or encoded transfers to perform
+     * @return True on success
+     */
+    function encodedBulkTransfer (
+        uint160 _lotSize, uint256[] calldata _transfers) external onlyDelegate returns (bool) {
+
+        uint256 count = _transfers.length;
+        for (uint256 i = 0; i < count; i++) {
+            uint256 tr = _transfers[i];
+            uint256 value = (tr >> 160) * _lotSize;
+            address to = address (tr & 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+            _approve(owner(), msg.sender, _allowances[owner()][msg.sender].sub(value));
+            _transfer(owner(), to, value);
+        }
+
+        return true;
     }
 }

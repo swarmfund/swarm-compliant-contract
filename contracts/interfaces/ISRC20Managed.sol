@@ -8,7 +8,4 @@ interface ISRC20Managed {
 
     function burn(address account, uint256 value) external returns (bool);
     function mint(address account, uint256 value) external returns (bool);
-
-    function renounceManagement() external returns (bool);
-    function transferManagement(address newManager) external returns (bool);
 }

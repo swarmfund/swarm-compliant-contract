@@ -1,14 +1,21 @@
 pragma solidity ^0.5.0;
 
-import "../rules/ITransferRestriction.sol";
-
+import "../interfaces/ITransferRules.sol";
 
 /**
  * @title FailedRestrictionMock contract
  * @dev ITransferRestriction which will fail.
  */
-contract FailedRestrictionMock is ITransferRestriction {
-    function authorize(address src20, address from, address to, uint256 value) external returns (bool) {
+contract FailedRestrictionMock is ITransferRules {
+    function setSRC(address src20) external returns (bool) {
+        return true;
+    }
+
+    function authorize(address from, address to, uint256 value) external returns (bool) {
+        return false;
+    }
+
+    function doTransfer(address from, address to, uint256 value) external returns (bool) {
         return false;
     }
 }
