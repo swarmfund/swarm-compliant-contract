@@ -134,7 +134,32 @@ contract('Issuer actions', async function ([_, whitelistManager, owner, issuer, 
             assert.equal(accContribution, true);
         });
 
-        it('should be able to accept contribution if contributor is already on whitelist');
+        it('should be able to accept contribution if contributor is already on whitelist', async function () {
+            const beforeBalanceETH = await this.swarmPoweredFundraiseMock.getBalanceETH(contributor, {from: issuer});
+
+            await this.contributorRestrictions.whitelistAccount(contributor, {from: issuer});
+
+            ({logs: this.logs} = await this.swarmPoweredFundraiseMock.send(amount, {from: owner}));
+            expectEvent.inLogs(this.logs, 'Contribution', {
+                from: owner,
+                amount: new BN(amount),
+                sequence: new BN(1),
+                baseCurrency: constants.ZERO_ADDRESS,
+            });
+            const sequence = this.logs[0].args.sequence;
+
+            const afterBalanceETH = await this.swarmPoweredFundraiseMock.getBalanceETH(contributor, {from: issuer});
+            assert.equal(beforeBalanceETH.add(amount).eq(afterBalanceETH), true);
+
+            // increase historical balances only if contrition rule is met check
+            const beforeHistoricalBalances = await this.swarmPoweredFundraiseMock.getHistoricalBalanceETH(sequence - 1, {from: issuer});
+            const afterHistoricalBalances = await this.swarmPoweredFundraiseMock.getHistoricalBalanceETH(sequence, {from: issuer});
+            assert.equal(beforeHistoricalBalances.add(amount).eq(afterHistoricalBalances), true);
+
+            // move contributions to acc contribution if contribution rule are met check
+            const accContribution = await this.swarmPoweredFundraiseMock.isContributionAccepted(sequence, {from: issuer});
+            assert.equal(accContribution, true);
+        });
 
         it('should be able to de-whitelist as a issuer', async function () {
             await this.contributorRestrictions.whitelistAccount(contributor, {from: issuer});
