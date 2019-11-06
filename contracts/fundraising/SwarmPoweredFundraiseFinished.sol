@@ -12,8 +12,27 @@ contract SwarmPoweredFundraiseFinished is SwarmPoweredFundraise {
     using SafeMath for uint256;
     // array
 
-    function () external payable {
-        revert();
+    constructor(
+        string memory _label,
+        address _src20,
+        uint256 _tokenAmount,
+        uint256 _startDate,
+        uint256 _endDate,
+        uint256 _softCap,
+        uint256 _hardCap,
+        address _baseCurrency
+    ) public
+    SwarmPoweredFundraise(
+        _label,
+        _src20,
+        _tokenAmount,
+        _startDate,
+        _endDate,
+        _softCap,
+        _hardCap,
+        _baseCurrency
+    )
+    {
     }
 
     function getBalanceETH(address contributor) public view returns (uint256) {

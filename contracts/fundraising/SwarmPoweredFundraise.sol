@@ -25,6 +25,8 @@ contract SwarmPoweredFundraise {
     uint256 public tokenPriceBCY;
     uint256 public totalTokenAmount;
 
+    event Contribution(address indexed from, uint256 amount, uint256 sequence, address baseCurrency);
+
     struct contribution {
         address currency;
         uint amount;
@@ -68,6 +70,7 @@ contract SwarmPoweredFundraise {
         c.sequence = sequence;
 
         contributionsList[msg.sender].push(c);
+        emit Contribution(msg.sender, msg.value, sequence, address(0));
     }
 
     function setTokenPriceBCY(uint256 _tokenPriceBCY) external returns (bool) {
@@ -158,6 +161,18 @@ contract SwarmPoweredFundraise {
     }
 
     function setContributionRules(address rules) external returns (bool) {
+        return true;
+    }
+
+    function setContributorRestrictions(address restrictions) external returns (bool) {
+        return true;
+    }
+
+    function getHistoricalBalanceETH(uint256 _sequence) external returns (uint256) {
+        return uint256(0);
+    }
+
+    function isContributionAccepted(uint256 _sequence) external returns (bool) {
         return true;
     }
 }
