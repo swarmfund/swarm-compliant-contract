@@ -126,10 +126,16 @@ contract('ContributorActions', async function ([_, whitelistManager /*authority*
 
             assert.equal(isOngoing === true, true);
             assert.equal(isFinished === true, true);
+           
+            
+            const balanceERC20before = await Erc20Token.balanceOf(contributor);
+            assert.equal(balanceERC20before == 0, true);
 
-            await shouldFail.reverting.withMessage(SwarmPoweredFundraiseFinished.claimTokens({from: contributor}),
-                "Cannot claim tokens: fundraising has finished");
-        
+            await SwarmPoweredFundraiseFinished.claimTokens({from: contributor});
+
+            const balanceERC20after = await Erc20Token.balanceOf(contributor);
+            assert.equal(balanceERC20after > 0, true);
+
         });
 
         it('should not be able claim tokens if fundraising expired', async function () {
