@@ -10,18 +10,64 @@ const SwarmPoweredFundraiseCanceled = artifacts.require('SwarmPoweredFundraiseCa
 const SwarmPoweredFundraiseExpired = artifacts.require('SwarmPoweredFundraiseExpired');
 const Erc20Token = artifacts.require('SwarmTokenMock');
 
-contract('ContributorActions', async function ([_, whitelistManager /*authority*/, owner, issuer, contributor]) {
+contract('ContributorActions', async function ([_, whitelistManager /*authority*/, owner, issuer, contributor, src20]) {
     const ercTotalSupply = new BN(10000);
     const amount = new BN(10);
     const minAmount = new BN(11);
     const maxAmount = new BN(100);
 
-    beforeEach(async function () {
-        this.swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new({from: owner}); // @TODO change owner to be token issuer...
+    const label = "mvpworkshop.co";
+    const tokenAmount = new BN(1000);
+    const startDate = new BN(moment().unix());
+    const endDate = new BN(moment().unix() + 100);
+    const softCap = new BN(100);
+    const hardCap = new BN(1000);
+    let baseCurrency = "0x89d24a6b4ccb1b6faa2625fe562bdd9a23260359"; // DAI
 
-        this.swarmPoweredFundraiseFinished = await SwarmPoweredFundraiseFinished.new({from: owner});
-        this.swarmPoweredFundraiseCanceled = await SwarmPoweredFundraiseCanceled.new({from: owner});
-        this.swarmPoweredFundraiseExpired = await SwarmPoweredFundraiseExpired.new({from: owner});
+    beforeEach(async function () {
+        this.swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new(
+            label,
+            src20,
+            tokenAmount,
+            startDate,
+            endDate,
+            softCap,
+            hardCap,
+            baseCurrency,
+            {from: issuer});
+
+        this.swarmPoweredFundraiseFinished = await SwarmPoweredFundraiseFinished.new(
+            label,
+            src20,
+            tokenAmount,
+            startDate,
+            endDate,
+            softCap,
+            hardCap,
+            baseCurrency,
+            {from: issuer});
+
+        this.swarmPoweredFundraiseCanceled = await SwarmPoweredFundraiseCanceled.new(
+            label,
+            src20,
+            tokenAmount,
+            startDate,
+            endDate,
+            softCap,
+            hardCap,
+            baseCurrency,
+            {from: issuer});
+
+        this.swarmPoweredFundraiseExpired = await SwarmPoweredFundraiseExpired.new(
+            label,
+            src20,
+            tokenAmount,
+            startDate,
+            endDate,
+            softCap,
+            hardCap,
+            baseCurrency,
+            {from: issuer});
 
         this.acceptedToken = await Erc20Token.new(owner, ercTotalSupply, {from: owner});
         this.notAcceptedToken = await Erc20Token.new(owner, ercTotalSupply, {from: owner});
@@ -46,14 +92,73 @@ contract('ContributorActions', async function ([_, whitelistManager /*authority*
                 // if acc contributing > max amount should fail
         });
 
-        it('should be able claim tokens if fundraising has finished');
 
-        it('should not be able claim tokens if fundraising expired');
+        it('should not be able claim tokens if accepted contributions are 0', async function () {
 
-        it('should not be able claim tokens if fundraising failed');
+            await SwarmPoweredFundraiseFinished.setMinMaxAmounts(minAmount, maxAmount); 
 
-        it('should not be able claim tokens if accepted contributions are 0');
+            await SwarmPoweredFundraiseFinished.send(amount, {from: owner});
 
-        it('should not be able claim tokens if contributions do not pass contribution rules');
+            await shouldFail.reverting.withMessage(SwarmPoweredFundraiseFinished.claimTokens({from: contributor}),
+            "Cannot claim tokens: you have not contributed enough");
+        
+        });
+
+        it('should not be able claim tokens if contributions do not pass contribution rules', async function () {
+
+            await SwarmPoweredFundraiseFinished.setMinMaxAmounts(minAmount, maxAmount, {from: owner}); 
+
+            await SwarmPoweredFundraiseFinished.send(amount, {from: contributor});
+            await SwarmPoweredFundraiseFinished.send(amount, {from: contributor});
+            await SwarmPoweredFundraiseFinished.send(amount, {from: contributor});
+
+            await SwarmPoweredFundraiseFinished.deWhitelist(contributor, {from: owner}); 
+
+            await shouldFail.reverting.withMessage(SwarmPoweredFundraiseFinished.claimTokens({from: contributor}),
+            "Cannot claim tokens: you are not whitelisted");
+
+        });
+
+        it('should be able claim tokens if fundraising has finished', async function () {
+
+            const isOngoing = await SwarmPoweredFundraiseFinished.isOngoing();
+            const isFinished = await SwarmPoweredFundraiseFinished.isFinished();
+
+            assert.equal(isOngoing === true, true);
+            assert.equal(isFinished === true, true);
+
+            await shouldFail.reverting.withMessage(SwarmPoweredFundraiseFinished.claimTokens({from: contributor}),
+                "Cannot claim tokens: fundraising has finished");
+        
+        });
+
+        it('should not be able claim tokens if fundraising expired', async function () {
+
+            const isOngoing = await SwarmPoweredFundraiseExpired.isOngoing();
+            const endDate = await SwarmPoweredFundraiseExpired.endDate();
+            const expiryPeriod = await SwarmPoweredFundraiseExpired.expiryPeriod();
+            const now = endDate + expiryPeriod + 100;
+
+            assert.equal(isOngoing === true, true);
+            assert.equal(endDate + expiryPeriod < now === true, true);
+
+            await shouldFail.reverting.withMessage(SwarmPoweredFundraiseExpired.claimTokens({from: contributor}),
+                "Cannot claim tokens: fundraising has expired");
+
+        });
+
+        it('should not be able claim tokens if fundraising has been canceled', async function () {
+
+            const isOngoing = await SwarmPoweredFundraiseCanceled.isOngoing();
+            const isCancelled = await SwarmPoweredFundraiseCanceled.isCancelled();
+
+            assert.equal(isOngoing === false, true);
+            assert.equal(isCancelled === true, true);
+
+            await shouldFail.reverting.withMessage(SwarmPoweredFundraiseCanceled.claimTokens({from: contributor}),
+                "Cannot claim tokens: fundraising has been cancelled");
+
+        });
+
     });
 });
