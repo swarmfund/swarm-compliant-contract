@@ -128,11 +128,11 @@ contract SwarmPoweredFundraise {
         return true;
     }
 
-    function acceptContribution(address contributor, address erc20, uint256 amount) external returns (bool) {
+    function acceptContribution(address contributor, address erc20, uint256 amount) external pure returns (bool) {
         return true;
     }
 
-    function rejectContribution(address contributor, address erc20, uint256 amount) external returns (bool) {
+    function rejectContribution(address contributor, address erc20, uint256 amount) external pure returns (bool) {
         return true;
     }
 
@@ -172,11 +172,11 @@ contract SwarmPoweredFundraise {
         return true;
     }
 
-    function setPresale(uint256 amountBCY, uint256 tokens) external returns (bool) {
+    function setPresale(uint256 amountBCY, uint256 tokens) external pure returns (bool) {
         return true;
     }
 
-    function getPresale() external returns (uint256, uint256) {
+    function getPresale() external pure returns (uint256, uint256) {
         return (0, 0);
     }
 
@@ -185,19 +185,19 @@ contract SwarmPoweredFundraise {
         return true;
     }
 
-    function setContributionRules(address rules) external returns (bool) {
+    function setContributionRules(address rules) external pure returns (bool) {
         return true;
     }
 
-    function setContributorRestrictions(address restrictions) external returns (bool) {
+    function setContributorRestrictions(address restrictions) external pure returns (bool) {
         return true;
     }
 
-    function getHistoricalBalanceETH(uint256 _sequence) external returns (uint256) {
+    function getHistoricalBalanceETH(uint256 _sequence) external pure returns (uint256) {
         return uint256(0);
     }
 
-    function isContributionAccepted(uint256 _sequence) external returns (bool) {
+    function isContributionAccepted(uint256 _sequence) external pure returns (bool) {
         return true;
     }
 
@@ -208,13 +208,15 @@ contract SwarmPoweredFundraise {
 
     function stakeAndMint(address ISOP, address[] memory addressList) public returns (bool) {
 
-        // Update the NAV
+        // @TODO convert all to SafeMath when happy with logic
+        // @TODO Update the NAV
         // assetRegistry.updateNetAssetValueUSD(src20, netAssetValueUSD);
         uint256 netAssetValueUSD = softCap;
         uint256 swmAmount = IGetRateMinter(minter).calcStake(netAssetValueUSD);
 
         // Collect the SWM tokens from ISOP. For now we don't loop but only have
         // One provider, chosen by the Token Issuer
+        // @TODO loop through providers
         address swmProvider = addressList[0];
         uint256 priceETH = IIssuerStakeOfferPool(ISOP).getSWMPriceETH(swmProvider, swmAmount);
         IIssuerStakeOfferPool(ISOP).buySWMTokens.value(priceETH)(swmProvider, swmAmount);
@@ -253,6 +255,8 @@ contract SwarmPoweredFundraise {
     // Convert an amount in currency into an amount in base currency
     function toBCY(uint256 amount, address currency) public returns (uint256) {
 
+        // @TODO lock rates when Fundraise finishes
+
         uint256 amountETH;
         uint256 amountBCY;
 
@@ -261,7 +265,7 @@ contract SwarmPoweredFundraise {
             return amount;
 
         // ERC20 - ETH
-        if (baseCurrency == zeroAddr && currency != zeroAddr) {
+        if (baseCurrency == zeroAddr) {
             amountBCY = IUniswap(currency).getTokenToEthInputPrice(amount);
             return amountBCY;
         }
