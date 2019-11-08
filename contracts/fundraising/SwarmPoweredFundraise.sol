@@ -2,6 +2,8 @@ pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
+import "../interfaces/IIssuerStakeOfferPool.sol";
+import "../interfaces/IGetRateMinter.sol";
 
 /**
  * @title The Fundraise Contract
@@ -38,6 +40,8 @@ contract SwarmPoweredFundraise {
     uint256 sequence;
 
     bool isOngoing = true;
+
+    address payable issuerWallet;
 
     constructor(
         string memory _label,
@@ -175,4 +179,64 @@ contract SwarmPoweredFundraise {
     function isContributionAccepted(uint256 _sequence) external returns (bool) {
         return true;
     }
+
+    function stakeAndMint(address ISOP) external returns (bool) {
+
+        // Stake and Mint
+        address SwarmERC20;
+        address minter;
+        address swmProvider;
+
+        // Set the NAV
+        // assetRegistry.updateNetAssetValueUSD(src20, netAssetValueUSD);
+
+        uint256 totalContributionsBCY;
+
+        uint256 netAssetValueUSD = softCap;
+        uint256 swmAmount = IGetRateMinter(minter).calcStake(netAssetValueUSD);
+
+        // Collect the SWM tokens from ISOP. For now we don't loop but only have
+        // One provider, chosen by the Token Issuer
+        uint256 priceETH = IIssuerStakeOfferPool(ISOP).getSWMPriceETH(swmProvider, swmAmount);
+        IIssuerStakeOfferPool(ISOP).buySWMTokens.value(priceETH)(swmProvider, swmAmount);
+
+        // SWM are on the Fundraise contract, approve the minter to spend them
+        IERC20(SwarmERC20).approve(minter, swmAmount);
+
+        // Mint
+        uint256 numSRC20Tokens = totalTokenAmount > 0 ? totalTokenAmount : totalContributionsBCY / tokenPriceBCY;        
+        IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
+
+        // Withdraw
+
+        uint256 amountETH;
+        uint256 amountDAI;
+        uint256 amountUSDC;
+        uint256 amountWBTC;
+
+        address erc20DAI;
+        address erc20USDC;
+        address erc20WBTC;
+
+        // Withdraw accepted ETH
+        issuerWallet.transfer(amountETH);
+
+        // Withdraw accepted DAI
+        IERC20(erc20DAI).approve(issuerWallet, amountDAI);
+        IERC20(erc20DAI).transferFrom(address(this), issuerWallet, amountDAI);
+
+        // Withdraw accepted USDC
+        IERC20(erc20USDC).approve(issuerWallet, amountUSDC);
+        IERC20(erc20USDC).transferFrom(address(this), issuerWallet, amountUSDC);
+        
+        // Withdraw accepted WBTC
+        IERC20(erc20WBTC).approve(issuerWallet, amountWBTC);
+        IERC20(erc20WBTC).transferFrom(address(this), issuerWallet, amountWBTC);
+
+        return true;
+
+    }
+
+
+
 }
