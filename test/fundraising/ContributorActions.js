@@ -9,6 +9,7 @@ const SwarmPoweredFundraiseFinished = artifacts.require('SwarmPoweredFundraiseFi
 const SwarmPoweredFundraiseCanceled = artifacts.require('SwarmPoweredFundraiseCanceled');
 const SwarmPoweredFundraiseExpired = artifacts.require('SwarmPoweredFundraiseExpired');
 const Erc20Token = artifacts.require('SwarmTokenMock');
+const Src20Token = artifacts.require('SRC20TokenMock');
 
 contract('ContributorActions', async function ([_, whitelistManager /*authority*/, owner, issuer, contributor, src20]) {
     const ercTotalSupply = new BN(10000);
@@ -126,7 +127,6 @@ contract('ContributorActions', async function ([_, whitelistManager /*authority*
 
             assert.equal(isOngoing === true, true);
             assert.equal(isFinished === true, true);
-           
             
             const balanceERC20before = await Erc20Token.balanceOf(contributor);
             assert.equal(balanceERC20before == 0, true);
