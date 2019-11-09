@@ -3,6 +3,9 @@ pragma solidity ^0.5.0;
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 
+import "../interfaces/IContributionRules.sol";
+import "../interfaces/IContributorRestrictions.sol";
+
 /**
  * @title The Fundraise Contract
  * This contract allows the deployer to perform a Swarm-Powered Fundraise.
@@ -20,24 +23,41 @@ contract SwarmPoweredFundraise {
     uint256 public hardCap;
     address public baseCurrency;
 
+    uint256 public expirationTime = 7776000; // 60 * 60 * 24 * 90 = ~3months
+
     bool public contributionLocking = true;
 
     uint256 public tokenPriceBCY;
     uint256 public totalTokenAmount;
 
-    event Contribution(address indexed from, uint256 amount, uint256 sequence, address baseCurrency);
+    event Contribution(address indexed from, uint256 amount, uint256 indexed sequence, address baseCurrency);
 
     struct contribution {
         address currency;
-        uint amount;
-        uint sequence;
+        uint256 amount;
+        uint256 sequence;
+        bool accepted;
+    }
+
+    struct AcceptedContribution {
+        uint256 amount;
     }
 
     mapping(address => contribution[]) contributionsList;
+    // contributor => currency =? sum
+    mapping(address => mapping(address => AcceptedContribution)) accContribution;
 
-    uint256 sequence;
+    uint256 public sequence;
 
-    bool isOngoing = true;
+    bool public isFinished;
+
+    address public contributionRules;
+    address public contributorRestrictions;
+
+    modifier onlyContributorRestrictions() {
+        require(msg.sender == contributorRestrictions);
+        _;
+    }
 
     constructor(
         string memory _label,
@@ -60,7 +80,9 @@ contract SwarmPoweredFundraise {
     }
 
     function() external payable {
-        require(isOngoing, 'Fundraise is not oingoing anymore!');
+        require(tokenPriceBCY != 0 || totalTokenAmount != 0, "Contribution failed: token price or total token amount are not set");
+        require(block.timestamp >= startDate, "Contribution failed: fundraising did not start");
+        require(block.timestamp <= endDate, "Contribution failed: fundraising has ended");
 
         sequence++;
 
@@ -70,26 +92,34 @@ contract SwarmPoweredFundraise {
         c.sequence = sequence;
 
         contributionsList[msg.sender].push(c);
+
+        _acceptContributor(msg.sender);
+
         emit Contribution(msg.sender, msg.value, sequence, address(0));
     }
 
     function setTokenPriceBCY(uint256 _tokenPriceBCY) external returns (bool) {
         // One has to be set or the other, never both.
+        require(tokenPriceBCY == 0, "Token price already set");
+        require(totalTokenAmount == 0, "Total token amount already set");
+
         tokenPriceBCY = _tokenPriceBCY;
-        totalTokenAmount = 0;
         return true;
     }
 
     function setTotalTokenAmount(uint256 _totalTokenAmount) external returns (bool) {
-        // One has to be set or the other, never both.
+        require(tokenPriceBCY == 0, "Token price already set");
+        require(totalTokenAmount == 0, "Total token amount already set");
+
         totalTokenAmount = _totalTokenAmount;
-        tokenPriceBCY = 0;
         return true;
     }
 
     function contribute(address erc20, uint256 amount) public returns (bool) {
-        require(isOngoing, 'Fundraise is not oingoing anymore!');
-        require(IERC20(erc20).transferFrom(msg.sender, address(this), amount), 'ERC20 transfer failed!');
+        require((tokenPriceBCY != 0 || totalTokenAmount != 0), "Contribution failed: token price or total token amount are not set");
+        require(block.timestamp >= startDate, "Contribution failed: fundraising did not start");
+        require(block.timestamp <= endDate, "Contribution failed: fundraising has ended");
+        require(IERC20(erc20).transferFrom(msg.sender, address(this), amount), 'Contribution failed: ERC20 transfer failed!');
 
         sequence++;
 
@@ -100,32 +130,29 @@ contract SwarmPoweredFundraise {
 
         contributionsList[msg.sender].push(c);
 
-        return true;
-    }
+        _acceptContributor(msg.sender);
 
-    function acceptContribution(address contributor, address erc20, uint256 amount) external returns (bool) {
-        return true;
-    }
+        emit Contribution(msg.sender, amount, sequence, erc20);
 
-    function rejectContribution(address contributor, address erc20, uint256 amount) external returns (bool) {
         return true;
     }
 
     function withdrawContributionETH() external returns (bool) {
-        require(!isOngoing, 'Cannot withdraw, fundraise is ongoing');
+        require(isFinished == true && block.timestamp < endDate.add(expirationTime), 'Withdrawal failed: fundraise has not finished');
 
         for (uint256 i = 0; i < contributionsList[msg.sender].length; i++) {
             if (contributionsList[msg.sender][i].currency != address(0))
                 continue;
             msg.sender.transfer(contributionsList[msg.sender][i].amount);
-            contributionsList[msg.sender][i].amount = 0;
         }
+
+        delete contributionsList[msg.sender];
 
         return true;
     }
 
     function withdrawContributionToken() external returns (bool) {
-        require(!isOngoing, 'Cannot withdraw, fundraise is ongoing');
+        require(isFinished == true && block.timestamp < endDate.add(expirationTime), 'Withdrawal failed: fundraise has not finished');
 
         for (uint256 i = 0; i < contributionsList[msg.sender].length; i++) {
             if (contributionsList[msg.sender][i].currency == address(0))
@@ -136,14 +163,15 @@ contract SwarmPoweredFundraise {
                     msg.sender,
                     contributionsList[msg.sender][i].amount),
                 'ERC20 transfer failed!');
-            contributionsList[msg.sender][i].amount = 0;
         }
+
+        delete contributionsList[msg.sender];
 
         return true;
     }
 
     function allowContributionWithdrawals() external returns (bool) {
-        contributionLocking = false;
+        delete contributionLocking;
         return true;
     }
 
@@ -156,15 +184,25 @@ contract SwarmPoweredFundraise {
     }
 
     function finishFundraising() external returns (bool) {
-        isOngoing = false;
+        require(isFinished == false, "Failed to finish fundraising: Fundraising already finished");
+        require(block.timestamp < endDate.add(expirationTime), "Failed to finish fundraising: expiration time passed");
+
+        isFinished = true;
+
         return true;
     }
 
     function setContributionRules(address rules) external returns (bool) {
+        require(contributionRules != address(0), "Contribution rules already set");
+
+        contributionRules = rules;
         return true;
     }
 
     function setContributorRestrictions(address restrictions) external returns (bool) {
+        require(contributorRestrictions != address(0), "Contributor restrictions already set");
+
+        contributorRestrictions = restrictions;
         return true;
     }
 
@@ -175,4 +213,62 @@ contract SwarmPoweredFundraise {
     function isContributionAccepted(uint256 _sequence) external returns (bool) {
         return true;
     }
+
+    function acceptContributor(address contributor) external onlyContributorRestrictions returns (bool) {
+        _acceptContributor(contributor);
+        return true;
+    }
+
+    function rejectContributor(address contributor) external onlyContributorRestrictions returns (bool) {
+        _rejectContributor(contributor);
+        return true;
+    }
+
+    function _acceptContributor(address contributor) internal returns (bool) {
+        require(IContributorRestrictions(contributorRestrictions).checkContributor(contributor));
+
+        for (uint256 i = 0; i < contributionsList[msg.sender].length; i++) {
+            if (contributionsList[msg.sender][i].accepted) {
+                continue;
+            }
+
+            contribution memory contr = contributionsList[msg.sender][i];
+
+            accContribution[contributor][contr.currency].amount =
+            accContribution[contributor][contr.currency].amount.add(
+                contributionsList[msg.sender][i].amount);
+
+            require(IContributionRules(contributionRules).checkContribution(accContribution[contributor][contr.currency].amount));// this is bad, rewrite
+            // min/max amount
+            // @TODO should return new truncated amount if over max amount or hardCap and exit
+
+            contributionsList[msg.sender][i].accepted = true;
+        }
+
+        return true;
+    }
+
+    function _rejectContributor(address contributor) internal returns (bool) {
+        require(!IContributorRestrictions(contributorRestrictions).checkContributor(contributor));
+
+        for (uint256 i = 0; i < contributionsList[msg.sender].length; i++) {
+            if (!contributionsList[msg.sender][i].accepted) {
+                continue;
+            }
+
+            contribution memory contr = contributionsList[msg.sender][i];
+
+            accContribution[contributor][contr.currency].amount =
+            accContribution[contributor][contr.currency].amount.sub(
+                contributionsList[msg.sender][i].amount);
+
+            // if amount becomes negative than means the investment was partial accepted (max amount or hard-cap
+
+            delete contributionsList[msg.sender][i].accepted;
+        }
+
+        return true;
+    }
+
+    // @TODO expose function to claim tokens
 }

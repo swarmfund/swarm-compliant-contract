@@ -39,7 +39,6 @@ contract('Third party actions', async function ([_, src20, owner, issuer, contri
 
         // @TODO uniswap token price oracle or mock price oracle
         this.SWMPriceOracle = await SWMPriceOracle.new(SWM_PRICE_USD_NUMERATOR, SWM_PRICE_USD_DENOMINATOR, {from: owner});
-        this.priceOracle = await
 
         this.swarmPoweredFundraiseMock = await SwarmPoweredFundraiseMock.new(
             label,

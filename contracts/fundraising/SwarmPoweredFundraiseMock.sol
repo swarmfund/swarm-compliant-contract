@@ -42,4 +42,12 @@ contract SwarmPoweredFundraiseMock is SwarmPoweredFundraise {
     function getBalanceToken(address token, uint256 amount) public view returns (uint256) {
         return 0;
     }
+
+        function acceptContribution(address contributor, uint256 sequence) external returns (bool) {
+            return true;
+        }
+
+        function rejectContribution(address contributor, uint256 sequence) external returns (bool) {
+            return true;
+        }
 }
