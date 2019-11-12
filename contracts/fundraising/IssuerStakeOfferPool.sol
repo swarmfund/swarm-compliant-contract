@@ -70,12 +70,11 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         return true;
     }
 
+    // Add an element to the sorted (ascending) linked list of elements
     function _addToList(address provider) internal returns (bool) {
 
         // If we don't have any elements set it up as the first one
         if (head == address(0)) {
-            providerList[provider].next = address(0);
-            providerList[provider].previous = address(0);
             head = provider;
             return true;
         }
@@ -83,6 +82,8 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         // If we have at least one element, loop through the list, add new element to correct place
         address i = head;
         while(i != address(0)) {
+            
+            // If we are smaller or equal than the current element, insert us before it
             if (providerList[provider].markup <= providerList[head].markup) {
 
                 if (i == head) {
@@ -103,8 +104,8 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         }
 
         // If the loop didn't place him, it means he's the last chap
-        // His .previous has been set above
-        providerList[provider].next = address(0);
+        // His .previous has been set above, his .next is 0 (set by default), 
+        // here we just repoint the old last element to this one
         providerList[providerList[provider].previous].next = provider;
         
         return true;
@@ -112,11 +113,10 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
 
     function _removeFromList(address provider) internal returns (bool) {
 
-        providerList[provider].tokens = 0;
-        providerList[provider].markup = 0;
         providerList[providerList[provider].previous].next = providerList[provider].next;
         providerList[providerList[provider].next].previous = providerList[provider].previous;
-        
+        delete(providerList[provider]);
+
         if (provider == head)
             head = address(0);
     }
@@ -137,6 +137,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         return true;
     }
 
+    // Should this apply retroactively, with a loop?
     function updateMinTokens(uint256 _minTokens) external onlyOwner {
         minTokens = _minTokens;
     }
@@ -145,23 +146,24 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         return providerList[account].tokens > 0;
     }
 
+    // Get how much ETH we need to spend to get numSWM from a specific account
+    // Get the market price of SWM and apply the account's markup
     function getSWMPriceETH(address account, uint256 numSWM) external returns (uint256) {
         (uint256 swmPriceUSDnumerator, uint256 swmPriceUSDdenominator) = IPriceUSD(swmPriceOracle).getPrice();
-        uint256 requiredUSD = numSWM * (swmPriceUSDnumerator / swmPriceUSDdenominator);
-
-        uint256 ethPriceUSD = IUniswap(uniswapUSDC).getTokenToEthOutputPrice(1);
-        return requiredUSD / ethPriceUSD * providerList[account].markup;
+        uint256 requiredUSD = numSWM * swmPriceUSDnumerator / swmPriceUSDdenominator;
+        uint256 requiredETH = IUniswap(uniswapUSDC).getEthToTokenOutputPrice(requiredUSD);
+        return requiredETH * providerList[account].markup;
     }
 
+    // Loop through the linked list of providers, buy SWM tokens from them until we have enough
     function loopBuySWMTokens(uint256 numSWM, uint256 maxMarkup) public payable returns (bool) {
 
-        // Convert figures
+        // Convert figures 
+        // @TODO this is all wrong, we don't have a market here, but a type of a bonding curve
         (uint256 swmPriceUSDnumerator, uint256 swmPriceUSDdenominator) = IPriceUSD(swmPriceOracle).getPrice();
-        uint256 requiredUSD = numSWM * (swmPriceUSDnumerator / swmPriceUSDdenominator);
+        uint256 requiredUSD = numSWM * swmPriceUSDnumerator / swmPriceUSDdenominator;
 
-        uint256 ethPriceUSD = IUniswap(uniswapUSDC).getTokenToEthOutputPrice(1);
-        uint256 receivedUSD = msg.value * ethPriceUSD;
-
+        uint256 receivedUSD = IUniswap(uniswapUSDC).getTokenToEthOutputPrice(msg.value);
         require(receivedUSD >= requiredUSD, 'Purchase failed: send more ETH!');
 
         // loop and collect tokens
@@ -173,11 +175,13 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
 
         while(i != address(0)) {
             
+            // If this one is too expensive, skip to the next
             if (providerList[i].markup > maxMarkup) {
                 i = providerList[i].next;
                 continue;
             }
 
+            // Take all his tokens, or only a part of them
             tokens = numSWM - tokensCollected >= providerList[i].tokens ? 
                      providerList[i].tokens : numSWM - tokensCollected;
 
@@ -188,9 +192,9 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
                 _removeFromList(i);
                 providerCount--;
             }
-            
-            tokenValueUSD = tokens * (swmPriceUSDnumerator / swmPriceUSDdenominator);
-            tokenValueETH = tokenValueUSD / ethPriceUSD;
+
+            tokenValueUSD = tokens * swmPriceUSDnumerator / swmPriceUSDdenominator;
+            tokenValueETH = IUniswap(uniswapUSDC).getTokenToEthInputPrice(tokenValueUSD);
 
             IERC20(swarmERC20).transferFrom(i, msg.sender, tokens);
             address(uint160(i)).transfer(tokenValueETH);
@@ -209,8 +213,8 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         (uint256 swmPriceUSDnumerator, uint256 swmPriceUSDdenominator) = IPriceUSD(swmPriceOracle).getPrice();
         uint256 requiredUSD = numSWM * (swmPriceUSDnumerator / swmPriceUSDdenominator);
 
-        uint256 ethPriceUSD = IUniswap(uniswapUSDC).getTokenToEthOutputPrice(1);
-        uint256 receivedUSD = msg.value * ethPriceUSD;
+        // Not the same as on a deep market. @TODO check with client if this is OK
+        uint256 receivedUSD = IUniswap(uniswapUSDC).getTokenToEthOutputPrice(msg.value);
 
         uint256 markup = receivedUSD / requiredUSD * 100;
 

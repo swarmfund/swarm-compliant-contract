@@ -39,6 +39,11 @@ contract SwarmPoweredFundraise {
     address erc20DAI;
     address erc20USDC;
     address erc20WBTC;
+
+    mapping(address => address) exchange;
+    // @TODO abstract away conversions and exchanges to an interface
+    // NOTE: bonding curves are not the same as deep markets where any amount barely moves the price
+
     address SwarmERC20;
     address minter;
 
@@ -76,6 +81,15 @@ contract SwarmPoweredFundraise {
     uint256 acceptedAmountDAI;
     uint256 acceptedAmountUSDC;
     uint256 acceptedAmountWBTC;
+
+    // @TODO maybe simplify like this
+    struct CurrencyStats {
+        address exchangeContract;
+        uint256 finalExchangeRateETH;
+        uint256 totalContributedAmount;
+        uint256 totalAcceptedAmount;
+    }
+    mapping (address => CurrencyStats) currencyStats;
 
     constructor(
         string memory _label,
@@ -295,6 +309,28 @@ contract SwarmPoweredFundraise {
     }
 
     // @TODO expose function to claim tokens
+    // Returns 0 if all tokens have been claimed, an integer if more are left
+    function claimTokens() external returns (uint256) {
+
+        uint256 totalContributorAcceptedBCY = 
+            toBCY(accContribution[msg.sender][zeroAddr].amount, zeroAddr) +
+            toBCY(accContribution[msg.sender][erc20DAI].amount, erc20DAI) +
+            toBCY(accContribution[msg.sender][erc20USDC].amount, erc20USDC) +
+            toBCY(accContribution[msg.sender][erc20WBTC].amount, erc20WBTC);
+
+        uint256 totalAcceptedBCY =
+            toBCY(acceptedAmountETH, zeroAddr) +
+            toBCY(acceptedAmountDAI, erc20DAI) +
+            toBCY(acceptedAmountUSDC, erc20USDC) +
+            toBCY(acceptedAmountWBTC, erc20WBTC);
+
+        tokenPriceBCY = tokenPriceBCY > 0 ? tokenPriceBCY : totalAcceptedBCY / totalTokenAmount;
+        uint256 tokenAllotment = totalContributorAcceptedBCY / tokenPriceBCY;
+
+        IERC20(erc20DAI).transfer(msg.sender, tokenAllotment);
+        return 0;
+
+    }
 
     function stakeAndMint(address ISOP) external returns (bool) {
         address[] memory a;
@@ -330,8 +366,8 @@ contract SwarmPoweredFundraise {
         IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
 
         // Withdraw
-        // Withdraw accepted ETH
-        issuerWallet.transfer(acceptedAmountETH);
+        // Withdraw accepted ETH, minus the amount spent to buy SWM tokens
+        issuerWallet.transfer(acceptedAmountETH - priceETH);
 
         // Withdraw accepted DAI
         IERC20(erc20DAI).approve(issuerWallet, acceptedAmountDAI);
@@ -363,19 +399,19 @@ contract SwarmPoweredFundraise {
 
         // ERC20 - ETH
         if (baseCurrency == zeroAddr) {
-            amountBCY = IUniswap(currency).getTokenToEthInputPrice(amount);
+            amountBCY = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
             return amountBCY;
         }
 
         // ETH - ERC20
         if (currency == zeroAddr) {
-            amountBCY = IUniswap(baseCurrency).getEthToTokenInputPrice(amount);
+            amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amount);
             return amountBCY;
         }
 
         // ERC20 - ERC20
-        amountETH = IUniswap(currency).getTokenToEthInputPrice(amount);
-        amountBCY = IUniswap(baseCurrency).getEthToTokenInputPrice(amountETH);
+        amountETH = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
+        amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amountETH);
         return amountBCY;
 
     }
