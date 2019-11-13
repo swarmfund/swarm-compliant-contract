@@ -35,10 +35,11 @@ contract SwarmPoweredFundraise {
 
     uint256 public tokenPriceBCY;
     uint256 public totalTokenAmount;
-    address zeroAddr = 0x0000000000000000000000000000000000000000; // Stands for ETH
+    address zeroAddr = address(0); // 0x0000000000000000000000000000000000000000; // Stands for ETH
     address erc20DAI;
     address erc20USDC;
     address erc20WBTC;
+    // IAccCurrency - address accCurrency;
 
     mapping(address => address) exchange;
     // @TODO abstract away conversions and exchanges to an interface
@@ -274,13 +275,17 @@ contract SwarmPoweredFundraise {
 
             accContribution[contributor][contr.currency].amount =
             accContribution[contributor][contr.currency].amount.add(
-                contributionsList[msg.sender][i].amount);
+                contr.amount);
 
-            require(IContributionRules(contributionRules).checkContribution(accContribution[contributor][contr.currency].amount));// this is bad, rewrite
-            // min/max amount
-            // @TODO should return new truncated amount if over max amount or hardCap and exit
+            uint256 newAmount = IContributionRules(contributionRules).checkContribution(accContribution[contributor][contr.currency].amount);
+            // @TODO should return new truncated amount if over max amount
 
             contributionsList[msg.sender][i].accepted = true;
+            _addToLumpSum(contr.currency, newAmount);
+
+            if (newAmount != amount) {
+                break;
+            }
         }
 
         return true;
@@ -298,11 +303,12 @@ contract SwarmPoweredFundraise {
 
             accContribution[contributor][contr.currency].amount =
             accContribution[contributor][contr.currency].amount.sub(
-                contributionsList[msg.sender][i].amount);
+                contr.amount);
 
-            // if amount becomes negative than means the investment was partial accepted (max amount or hard-cap
+            // @TODO if amount becomes negative than means the investment was partial accepted (max amount) and should not revert...
 
             delete contributionsList[msg.sender][i].accepted;
+            _subFromLumpSum(contr.currency, contr.amount);
         }
 
         return true;
@@ -416,4 +422,31 @@ contract SwarmPoweredFundraise {
 
     }
 
+    function _addToLumpSum(address currency, uint256 amount) internal returns (bool){
+        if (currency == zeroAddr) {
+            acceptedAmountETH = acceptedAmountETH.add(amount);
+        } else if (currency == erc20DAI) {
+            acceptedAmountDAI = acceptedAmountDAI.add(amount);
+        } else if (currency == erc20USDC) {
+            acceptedAmountUSDC = acceptedAmountUSDC.add(amount);
+        } else if (currency == erc20WBTC ) {
+            acceptedAmountWBTC = acceptedAmountWBTC.add(amount);
+        }
+
+        return true;
+    }
+
+    function _subFromLumpSum(address currency, uint256 amount) internal returns (bool) {
+        if (currency == zeroAddr) {
+            acceptedAmountETH = acceptedAmountETH.sub(amount);
+        } else if (currency == erc20DAI) {
+            acceptedAmountDAI = acceptedAmountDAI.sub(amount);
+        } else if (currency == erc20USDC) {
+            acceptedAmountUSDC = acceptedAmountUSDC.sub(amount);
+        } else if (currency == erc20WBTC ) {
+            acceptedAmountWBTC = acceptedAmountWBTC.sub(amount);
+        }
+
+        return true;
+    }
 }

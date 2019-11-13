@@ -106,7 +106,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         // If the loop didn't place him, it means he's the last chap
         // His .previous has been set above, his .next is 0 (set by default), 
         // here we just repoint the old last element to this one
-        providerList[providerList[provider].previous].next = provider;
+        providerList[providerList[provider].previous].next = provider; //this line???
         
         return true;
     }
