@@ -14,6 +14,6 @@ interface IIssuerStakeOfferPool {
     function isStakeOfferer(address account) external view returns (bool);
     function getSWMPriceETH(address account, uint256 numSWM) external returns (uint256);
     function buySWMTokens(address account, uint256 numSWM) external payable returns (bool);
-    function loopBuySWMTokens(address account, uint256 numSWM) external payable returns (bool);
+    function loopBuySWMTokens(uint256 numSWM,  uint256 _maxMarkup) external payable returns (bool);
 
 }

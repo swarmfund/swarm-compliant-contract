@@ -23,22 +23,23 @@ contract SwarmPoweredFundraiseFinished is SwarmPoweredFundraise {
         uint256 _endDate,
         uint256 _softCap,
         uint256 _hardCap,
-        address _baseCurrency)
-        SwarmPoweredFundraise(
-            _label,
-            _src20,
-            _tokenAmount,
-            _startDate,
-            _endDate,
-            _softCap,
-            _hardCap,
-            _baseCurrency
-            )
-        public
+        address _baseCurrency
+    )
+    SwarmPoweredFundraise(
+        _label,
+        _src20,
+        _tokenAmount,
+        _startDate,
+        _endDate,
+        _softCap,
+        _hardCap,
+        _baseCurrency
+    )
+    public
     {
     }
 
-    function () external payable {
+    function() external payable {
         revert();
     }
 
@@ -50,7 +51,7 @@ contract SwarmPoweredFundraiseFinished is SwarmPoweredFundraise {
         return 0;
     }
 
-    function claimTokens() public view returns (uint256) {
+    function claimTokens() external returns (uint256) {
         return 0;
     }
 }
