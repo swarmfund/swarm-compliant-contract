@@ -84,6 +84,11 @@ contract SwarmPoweredFundraise {
     uint256 acceptedAmountUSDC;
     uint256 acceptedAmountWBTC;
 
+    uint256 rateETHtoBCY;
+    uint256 rateDAItoBCY;
+    uint256 rateUSDCtoBCY;
+    uint256 rateWBTCtoBCY;
+
     // @TODO maybe simplify like this
     struct CurrencyStats {
         address exchangeContract;
@@ -235,7 +240,7 @@ contract SwarmPoweredFundraise {
 
         require(totalContributionsBCY >= toBCY(softCap, erc20USDC));
 
-        // @TODO _lockRate()
+        _lockRate();
 
         isFinished = true;
 
@@ -279,10 +284,7 @@ contract SwarmPoweredFundraise {
 
         uint256 totalContributorAcceptedBCY;
         for (uint256 i = 0; i < contributionsList[msg.sender].length; i++) {
-            if (
-                contributionsList[msg.sender][i].accepted ||
-                IContributionRules(contributionRules).checkContribution(totalContributorAcceptedBCY)
-            ) {
+            if ( contributionsList[msg.sender][i].accepted ) {
                 continue;
             }
 
@@ -298,8 +300,27 @@ contract SwarmPoweredFundraise {
                 toBCY(accContribution[contributor][erc20WBTC].amount, erc20WBTC));
 
             _addToLumpSum(contr.currency, contr.amount);
-            contributionsList[msg.sender][i].accepted = true;
+
+            (bool isGreater, uint256 newAmountBCY) = IContributionRules(contributionRules).isGreaterThenMax(totalContributorAcceptedBCY);
+            if (isGreater) {
+                // if true should count investment amount
+                uint256 amountBCY = toBCY(contr.amount, contr.currency);
+                totalContributorAcceptedBCY = totalContributorAcceptedBCY.sub(amountBCY.sub(newAmountBCY));
+
+                // remove (amount - newAmount) from lump sum, and totalContributorAcceptedBCY
+
+                uint256 newAmount = fromBCY(newAmountBCY, contr.currency);
+                _subFromLumpSum(newAmount, contr.currency);
+
+                // should track how much has accepted and how much was not, and should handle this invest as not accepted fully
+
+                // @TODO go though the edge-case of re-accepting tx when maxAmount is reached
+            } else {
+                contributionsList[msg.sender][i].accepted = true;
+            }
         }
+
+        require(!IContributionRules(contributionRules).isBelowMin(totalContributorAcceptedBCY));
 
         return true;
     }
@@ -317,6 +338,8 @@ contract SwarmPoweredFundraise {
             accContribution[contributor][contr.currency].amount =
             accContribution[contributor][contr.currency].amount.sub(
                 contr.amount);
+
+            // @TODO handle semi accepted tx
 
             delete contributionsList[msg.sender][i].accepted;
             _subFromLumpSum(contr.currency, contr.amount);
@@ -370,6 +393,8 @@ contract SwarmPoweredFundraise {
         // @TODO convert all to SafeMath when happy with logic
         // @TODO Update the NAV
         // assetRegistry.updateNetAssetValueUSD(src20, netAssetValueUSD);
+
+        // @TODO this should be totalContributionsBCY
         uint256 netAssetValueUSD = softCap;
         uint256 swmAmount = IGetRateMinter(minter).calcStake(netAssetValueUSD);
 
@@ -410,9 +435,6 @@ contract SwarmPoweredFundraise {
 
     // Convert an amount in currency into an amount in base currency
     function toBCY(uint256 amount, address currency) public returns (uint256) {
-
-        // @TODO lock rates when Fundraise finishes
-
         uint256 amountETH;
         uint256 amountBCY;
 
@@ -420,24 +442,37 @@ contract SwarmPoweredFundraise {
         if (currency == baseCurrency)
             return amount;
 
-        // ERC20 - ETH
-        if (baseCurrency == zeroAddr) {
-            amountBCY = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
+        if (rateETHtoBCY != 0) {
+            // ERC20 - ETH
+            if (baseCurrency == zeroAddr) {
+                amountBCY = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
+                return amountBCY;
+            }
+
+            // ETH - ERC20
+            if (currency == zeroAddr) {
+                amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amount);
+                return amountBCY;
+            }
+
+            // ERC20 - ERC20
+            amountETH = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
+            amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amountETH);
             return amountBCY;
         }
 
-        // ETH - ERC20
         if (currency == zeroAddr) {
-            amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amount);
-            return amountBCY;
+            return amount.mul(10 ** 18).div(rateETHtoBCY);
+        } else if (currency == erc20DAI) {
+            return amount.mul(10 ** 18).div(rateDAItoBCY);
+        } else if (currency == erc20USDC) {
+            return amount.mul(10 ** 18).div(rateUSDCtoBCY);
+        } else {
+            return amount.mul(10 ** 18).div(rateWBTCtoBCY);
         }
-
-        // ERC20 - ERC20
-        amountETH = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
-        amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amountETH);
-        return amountBCY;
-
     }
+
+    // @TODO function fromBCY
 
     function _addToLumpSum(address currency, uint256 amount) internal returns (bool){
         if (currency == zeroAddr) {
@@ -468,8 +503,45 @@ contract SwarmPoweredFundraise {
     }
 
     function _lockRate() internal returns (bool) {
+        rateETHtoBCY = acceptedAmountETH.mul(10 ** 18).div(toBCY(acceptedAmountETH, zeroAddr));
+        rateDAItoBCY = acceptedAmountDAI.mul(10 ** 18).div(toBCY(acceptedAmountDAI, erc20DAI));
+        rateUSDCtoBCY = acceptedAmountUSDC.mul(10 ** 18).div(toBCY(acceptedAmountUSDC, erc20USDC));
+        rateWBTCtoBCY = acceptedAmountWBTC.mul(10 ** 18).div(toBCY(acceptedAmountWBTC, erc20WBTC));
+
         return true;
     }
 
     // @TODO stakeAndMint without IssuerStakeOfferPool
+    function stakeAndMint() public returns (bool) {
+        require(isFinished);
+
+        // Mint
+        uint256 totalContributionsBCY = toBCY(acceptedAmountETH, zeroAddr) +
+        toBCY(acceptedAmountDAI, erc20DAI) +
+        toBCY(acceptedAmountUSDC, erc20USDC) +
+        toBCY(acceptedAmountWBTC, erc20WBTC);
+
+        require(totalContributionsBCY >= toBCY(softCap, erc20USDC));
+
+        // @TODO think more about this flow...
+        IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
+
+        // Withdraw
+        // Withdraw accepted ETH, minus the amount spent to buy SWM tokens
+        issuerWallet.transfer(acceptedAmountETH - priceETH);
+
+        // Withdraw accepted DAI
+        //        IERC20(erc20DAI).approve(issuerWallet, acceptedAmountDAI);
+        IERC20(erc20DAI).transfer(issuerWallet, acceptedAmountDAI);
+
+        // Withdraw accepted USDC
+        //        IERC20(erc20USDC).approve(issuerWallet, acceptedAmountUSDC);
+        IERC20(erc20USDC).transfer(issuerWallet, acceptedAmountUSDC);
+
+        // Withdraw accepted WBTC
+        //        IERC20(erc20WBTC).approve(issuerWallet, acceptedAmountWBTC);
+        IERC20(erc20WBTC).transfer(issuerWallet, acceptedAmountWBTC);
+
+        return true;
+    }
 }
