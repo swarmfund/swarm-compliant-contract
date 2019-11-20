@@ -18,7 +18,7 @@ import "../interfaces/ISRC20.sol";
 contract SwarmPoweredFundraise is Ownable {
 
     using SafeMath for uint256;
-    // @TODO convert all math in the contract to SafeMath when happy with logic
+    // @TODO convert all math in the contract to SafeMath once happy with logic
 
     event Contribution(address indexed from, uint256 amount, uint256 sequence, address baseCurrency);
     event SRC20TokensClaimed(address indexed by, uint256 tokenAllotment);
@@ -31,7 +31,7 @@ contract SwarmPoweredFundraise is Ownable {
     string public label;
     address public src20;
     uint256 public tokenAmount;
-    uint256 public totalTokenAmount;
+    uint256 public SRC20tokenSupply;
     uint256 public tokenPriceBCY;
     uint256 public startDate;
     uint256 public endDate;
@@ -40,6 +40,8 @@ contract SwarmPoweredFundraise is Ownable {
     address public baseCurrency;
     uint256 public minAmountBCY;
     uint256 public maxAmountBCY;
+    uint256 public preSaleAmountBCY; // the amount raised in the Presale phase, in base currency
+    uint256 public preSaleTokensReserved; // the number of SRC20 tokens reserved for the presale
     // variables that do change over time
     uint256 public fundraiseAmountBCY;
     uint256 public sequence;
@@ -85,45 +87,39 @@ contract SwarmPoweredFundraise is Ownable {
 
     // @TODO think about naming: pending vs buffered
     // per contributor and currency, pending amount
-    mapping(address => mapping(address => uint256)) bufferedContributions;
+    mapping(address => mapping(address => uint256)) public bufferedContributions;
 
     // per contributor and currency, qualified amount
     // a qualified amount is amount that has passed min/max checks and has been placed in the queue
-    mapping(address => mapping(address => uint256)) qualifiedContributions;
+    mapping(address => mapping(address => uint256)) public qualifiedContributions;
 
     // per currency, total qualified sums
-    mapping(address => uint256) qualifiedSums;
+    mapping(address => uint256) public qualifiedSums;
 
     // per currency, its final exchange rate to BCY
     mapping(address => uint256) lockedExchangeRate;
 
-    // @TODO maybe simplify like this
+    // @TODO maybe combine some per-currency stats like this
     struct CurrencyStats {
         address exchangeContract;
         uint256 finalExchangeRate;
-        uint256 totalContributedAmount;
+        uint256 totalBufferedAmount;
         uint256 totalQualifiedAmount;
     }
-
     mapping(address => CurrencyStats) currencyStats;
 
     struct bal {
         uint256 sequence;
         uint256 balance;
     }
-
-    bal[] historicalBalanceETH;
-    bal[] historicalBalanceDAI;
-    bal[] historicalBalanceUSDC;
-    bal[] historicalBalanceWBTC;
-
-    mapping( address => bal[] ) historicalBalance;
+    mapping(address => bal[]) historicalBalance;
 
     // uint256 rateETHtoBCY;
     // uint256 rateDAItoBCY;
     // uint256 rateUSDCtoBCY;
     // uint256 rateWBTCtoBCY;
 
+    // only allow the external contract that handles restrictions to call
     modifier onlyContributorRestrictions() {
         require(msg.sender == contributorRestrictions);
         _;
@@ -172,7 +168,7 @@ contract SwarmPoweredFundraise is Ownable {
 
     // This gets used if a person simply sends ETH to the contract
     function() external payable {
-        require(tokenPriceBCY != 0 || totalTokenAmount != 0, "Contribution failed: token price or total token amount are not set");
+        require(tokenPriceBCY != 0 || SRC20tokenSupply != 0, "Contribution failed: token price or total token amount are not set");
         require(block.timestamp >= startDate, "Contribution failed: fundraising did not start");
         require(block.timestamp <= endDate, "Contribution failed: fundraising has ended");
 
@@ -190,20 +186,22 @@ contract SwarmPoweredFundraise is Ownable {
         // bool isStarted = true;
     }
 
+    // We can either set the token price, or the total token supply
     function setTokenPriceBCY(uint256 _tokenPriceBCY) external returns (bool) {
         // One has to be set or the other, never both.
         require(tokenPriceBCY == 0, "Token price already set");
-        require(totalTokenAmount == 0, "Total token amount already set");
+        require(SRC20tokenSupply == 0, "Total token amount already set");
 
         tokenPriceBCY = _tokenPriceBCY;
         return true;
     }
 
-    function setTotalTokenAmount(uint256 _totalTokenAmount) external returns (bool) {
+    // We can either set the token total supply, or the token price
+    function setSRC20tokenSupply(uint256 _SRC20tokenSupply) external returns (bool) {
         require(tokenPriceBCY == 0, "Token price already set");
-        require(totalTokenAmount == 0, "Total token amount already set");
+        require(SRC20tokenSupply == 0, "Total token amount already set");
 
-        totalTokenAmount = _totalTokenAmount;
+        SRC20tokenSupply = _SRC20tokenSupply;
         return true;
     }
 
@@ -301,7 +299,7 @@ contract SwarmPoweredFundraise is Ownable {
     function _contribute(address contributor, address erc20, uint256 amount) 
         public onlyAcceptedTokens(erc20) returns (bool) {
         require(isFinished == false, 'Contribution failes: fundraise has completed');
-        require((tokenPriceBCY != 0 || totalTokenAmount != 0), "Contribution failed: token price or total token amount are not set");
+        require((tokenPriceBCY != 0 || SRC20tokenSupply != 0), "Contribution failed: token price or total token amount are not set");
         require(block.timestamp >= startDate, "Contribution failed: fundraising did not start");
         require(block.timestamp <= endDate, "Contribution failed: fundraising has ended");
 
@@ -430,13 +428,15 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
+    // This will be called if/when the fundraise expires
     function allowContributionWithdrawals() external returns (bool) {
         delete contributionLocking;
         return true;
     }
 
-    function getPresale() external pure returns (uint256, uint256) {
-        return (0, 0);
+    // Retrieve the presale amount and price
+    function getPresale() external view returns (uint256, uint256) {
+        return (preSaleAmountBCY, preSaleTokensReserved);
     }
 
     // Perform all the necessary actions to finish the fundraise
@@ -463,7 +463,7 @@ contract SwarmPoweredFundraise is Ownable {
 
         // find out the token price 
         // @TODO include Presale in this
-        tokenPriceBCY = tokenPriceBCY > 0 ? tokenPriceBCY : fundraiseAmountBCY / totalTokenAmount;
+        tokenPriceBCY = tokenPriceBCY > 0 ? tokenPriceBCY : fundraiseAmountBCY / SRC20tokenSupply;
 
         isFinished = true;
         return true;
@@ -559,16 +559,16 @@ contract SwarmPoweredFundraise is Ownable {
 
     // return the balance in _currency at the time of the _sequence
     function getHistoricalBalance(uint256 _sequence, address _currency) public view returns (uint256) {
-        bal[] memory arr;
-        if (_currency == zeroAddr) {
-            arr = historicalBalanceETH;
-        } else if (_currency == erc20DAI) {
-            arr = historicalBalanceDAI;
-        } else if (_currency == erc20USDC) {
-            arr = historicalBalanceUSDC;
-        } else if (_currency == erc20WBTC) {
-            arr = historicalBalanceWBTC;
-        }
+        bal[] memory arr = historicalBalance[_currency];
+        // if (_currency == zeroAddr) {
+        //     arr = historicalBalanceETH;
+        // } else if (_currency == erc20DAI) {
+        //     arr = historicalBalanceDAI;
+        // } else if (_currency == erc20USDC) {
+        //     arr = historicalBalanceUSDC;
+        // } else if (_currency == erc20WBTC) {
+        //     arr = historicalBalanceWBTC;
+        // }
         uint256 l;
         uint256 r = arr.length;
         uint256 mid;
@@ -676,7 +676,7 @@ contract SwarmPoweredFundraise is Ownable {
         finishFundraising();        
         require(isFinished);
 
-        uint256 numSRC20Tokens = totalTokenAmount > 0 ? totalTokenAmount : fundraiseAmountBCY / tokenPriceBCY;
+        uint256 numSRC20Tokens = SRC20tokenSupply > 0 ? SRC20tokenSupply : fundraiseAmountBCY / tokenPriceBCY;
         // Stake and mint
         IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
 
@@ -744,7 +744,7 @@ contract SwarmPoweredFundraise is Ownable {
         // this needs to be called by ISOP, because ISOP is owner of the tokens
         IERC20(SwarmERC20).approve(minter, swmAmount);
 
-        uint256 numSRC20Tokens = totalTokenAmount > 0 ? totalTokenAmount : fundraiseAmountBCY / tokenPriceBCY;
+        uint256 numSRC20Tokens = SRC20tokenSupply > 0 ? SRC20tokenSupply : fundraiseAmountBCY / tokenPriceBCY;
         // Stake and mint
         IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
 
@@ -802,7 +802,7 @@ contract SwarmPoweredFundraise is Ownable {
         amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amountETH);
         return amountBCY;
 
-        // @TODO what is this?
+        // @TODO investigate how this works...
         // if (currency == zeroAddr) {
         //     return amount.mul(10 ** 18).div(rateETHtoBCY);
         // } else if (currency == erc20DAI) {
