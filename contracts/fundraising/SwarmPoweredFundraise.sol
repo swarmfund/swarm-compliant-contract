@@ -29,37 +29,48 @@ contract SwarmPoweredFundraise is Ownable {
 
     // Setup variables that never change
     string public label;
-    address public src20;
-    uint256 public tokenAmount;
-    uint256 public SRC20tokenSupply;
-    uint256 public tokenPriceBCY;
+
     uint256 public startDate;
     uint256 public endDate;
-    uint256 public softCapBCY;
-    uint256 public hardCapBCY;
     address public baseCurrency;
     uint256 public minAmountBCY;
     uint256 public maxAmountBCY;
     uint256 public preSaleAmountBCY; // the amount raised in the Presale phase, in base currency
     uint256 public preSaleTokensReserved; // the number of SRC20 tokens reserved for the presale
-    // variables that do change over time
+    // variables that can change over time
+    uint256 public softCapBCY;
+    uint256 public hardCapBCY;
+    uint256 public tokenPriceBCY;
+    uint256 public SRC20tokenSupply;
     uint256 public fundraiseAmountBCY;
     uint256 public sequence;
     uint256 public expirationTime = 7776000; // default: 60 * 60 * 24 * 90 = ~3months
     uint256 public totalIssuerWithdrawalsBCY;
 
-    bool public isFinished;
-    bool public contributionLocking = true;
-    bool public offchainContributionsAllowed = false;
-
+    address public src20;
     address public contributionRules;
     address public contributorRestrictions;
     address public SwarmERC20;
     address public minter;
     address payable issuerWallet;
 
+    bool public isFinished;
+    bool public contributionLocking = true;
+    bool public offchainContributionsAllowed = false;
+
+    uint256 public numberOfContributors;
+
+    struct Affiliate {
+        address account;
+        uint256 percentage;
+        uint256 minAmount;
+    }
+    // Affiliate links
+    mapping(string => Affiliate) affiliates;
+
     // @TODO pass these as parameters
-    // @TODO mapping(uint256 => address) erc20;
+    // @TODO keep contracts in a mapping and currencies as an array/enum
+    // mapping(uint256 => address) erc20;
     address zeroAddr = address(0); // 0x0000000000000000000000000000000000000000; // Stands for ETH
     address erc20DAI = 0x89d24A6b4CcB1B6fAA2625fE562bDD9a23260359;
     address erc20USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
@@ -99,7 +110,7 @@ contract SwarmPoweredFundraise is Ownable {
     // per currency, its final exchange rate to BCY
     mapping(address => uint256) lockedExchangeRate;
 
-    // @TODO maybe combine some per-currency stats like this
+    // @TODO maybe combine some of the per-currency stats like this
     struct CurrencyStats {
         address exchangeContract;
         uint256 finalExchangeRate;
@@ -125,8 +136,8 @@ contract SwarmPoweredFundraise is Ownable {
         _;
     }
 
-    // only allow the 4 currencies we accept, otherwise we have a mess downstream
-    modifier onlyAcceptedTokens(address erc20) {
+    // only allow the currencies we accept
+    modifier onlyAcceptedCurrencies(address erc20) {
         require(erc20 == zeroAddr ||
                 erc20 == erc20DAI ||
                 erc20 == erc20USDC ||
@@ -138,7 +149,7 @@ contract SwarmPoweredFundraise is Ownable {
     constructor(
         string memory _label,
         address _src20,
-        uint256 _tokenAmount,
+        uint256 _SRC20tokenSupply,
         uint256 _startDate,
         uint256 _endDate,
         uint256 _softCapBCY,
@@ -147,7 +158,7 @@ contract SwarmPoweredFundraise is Ownable {
     ) public {
         label = _label;
         src20 = _src20;
-        tokenAmount = _tokenAmount;
+        SRC20tokenSupply = _SRC20tokenSupply;
         startDate = _startDate;
         endDate = _endDate;
         softCapBCY = _softCapBCY;
@@ -172,7 +183,7 @@ contract SwarmPoweredFundraise is Ownable {
         require(block.timestamp >= startDate, "Contribution failed: fundraising did not start");
         require(block.timestamp <= endDate, "Contribution failed: fundraising has ended");
 
-        _contribute(msg.sender, zeroAddr, msg.value);
+        _contribute(msg.sender, zeroAddr, msg.value, '');
     }
 
     // This could all be in the constructor, but we have to avoid stack too deep error
@@ -210,7 +221,7 @@ contract SwarmPoweredFundraise is Ownable {
     // maybe have another more basic function 
     // addContributionMinMax, addContribution
     function addContribution(address contributor, address erc20, uint256 amount) 
-                             internal onlyAcceptedTokens(erc20) returns (bool) {
+                             internal onlyAcceptedCurrencies(erc20) returns (bool) {
 
         // convert the coming contribution to BCY
         uint256 amountBCY = toBCY( amount, erc20 );
@@ -222,10 +233,10 @@ contract SwarmPoweredFundraise is Ownable {
                                            toBCY( qualifiedContributions[contributor][erc20WBTC], erc20WBTC);
 
         // get the total with this contribution
-        uint256 totalContributionsBCY = previousContributionsBCY + amountBCY;
+        uint256 contributionsBCY = previousContributionsBCY + amountBCY;
 
         // if we are still below the minimum, return
-        //if (totalContributionsBCY < minAmountBCY)
+        //if (contributionsBCY < minAmountBCY)
         //    return;
 
         // now do the max checking... 
@@ -236,7 +247,7 @@ contract SwarmPoweredFundraise is Ownable {
 
         uint256 qualifiedAmount;
         // if we cross the max, take only a portion of the contribution, via a percentage
-        if (totalContributionsBCY > maxAmountBCY) {
+        if (contributionsBCY > maxAmountBCY) {
             qualifiedAmount = (maxAmountBCY - previousContributionsBCY) / amountBCY
                             * amount;
         }
@@ -245,6 +256,10 @@ contract SwarmPoweredFundraise is Ownable {
 
         // leave the extra in the buffer, get the all the rest
         bufferedContributions[contributor][erc20] -= qualifiedAmount;
+
+        // if this is the first time he's contributing, increase the contributor counter
+        if (contributionsList[contributor].length == 0)
+            numberOfContributors++;
 
         contribution memory c;
         sequence++;
@@ -268,7 +283,7 @@ contract SwarmPoweredFundraise is Ownable {
     // Allows Token Issuer to add a contribution to the fundraise contract's accounting
     // in the case he received an offchain contribution, for example
     function addOffchainContribution(address contributor, address erc20, uint256 amount) 
-             public onlyAcceptedTokens(erc20) returns (bool) {
+             public onlyAcceptedCurrencies(erc20) returns (bool) {
 
         require(offchainContributionsAllowed, 'Offchain contribution failed: not allowed by setup!');
 
@@ -290,14 +305,20 @@ contract SwarmPoweredFundraise is Ownable {
                          .status = ContributionStatus.Offchain;
     }
 
-    // @TODO contribute with affiliate links
-    function contribute(address erc20, uint256 amount) public onlyAcceptedTokens(erc20) returns (bool) {
-        _contribute(msg.sender, erc20, amount);
+    // contribute with an affiliate link
+    function contribute(address erc20, uint256 amount, string memory affiliateLink) 
+        public onlyAcceptedCurrencies(erc20) returns (bool) {
+        _contribute(msg.sender, erc20, amount, affiliateLink);
+    }
+
+    // contribute without an affiliate link
+    function contribute(address erc20, uint256 amount) public onlyAcceptedCurrencies(erc20) returns (bool) {
+        _contribute(msg.sender, erc20, amount, "");
     }
 
     // Allows contributor to contribute in the form of ERC20 tokens accepted by the fundraise
-    function _contribute(address contributor, address erc20, uint256 amount) 
-        public onlyAcceptedTokens(erc20) returns (bool) {
+    function _contribute(address contributor, address erc20, uint256 amount, string memory affiliateLink) 
+        public onlyAcceptedCurrencies(erc20) returns (bool) {
         require(isFinished == false, 'Contribution failes: fundraise has completed');
         require((tokenPriceBCY != 0 || SRC20tokenSupply != 0), "Contribution failed: token price or total token amount are not set");
         require(block.timestamp >= startDate, "Contribution failed: fundraising did not start");
@@ -307,6 +328,14 @@ contract SwarmPoweredFundraise is Ownable {
         if (erc20 != zeroAddr)
             require(IERC20(erc20).transferFrom(contributor, address(this), amount), 
                     'Contribution failed: ERC20 transfer failed!');
+
+        if (bytes(affiliateLink).length > 0) {
+            //send the reward to referee's buffer
+            bufferedContributions[affiliates[affiliateLink].account][erc20] += amount * affiliates[affiliateLink].percentage;
+
+            //adjust the amount
+            amount -= amount * affiliates[affiliateLink].percentage;
+        }
 
         // add the contribution to the buffer
         bufferedContributions[contributor][erc20] += amount;
@@ -547,6 +576,9 @@ contract SwarmPoweredFundraise is Ownable {
         // adjust the caps, which are always in BCY
         softCapBCY = softCapBCY + contributionsBCY;
         hardCapBCY = hardCapBCY + contributionsBCY;
+
+        // decrease the global counter of contributors
+        numberOfContributors--;
 
         emit ContributorRemoved(contributor);
         return true;
