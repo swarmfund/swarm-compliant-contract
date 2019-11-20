@@ -103,6 +103,11 @@ contract SwarmPoweredFundraise is Ownable {
         _;
     }
 
+    uint256 rateETHtoBCY;
+    uint256 rateDAItoBCY;
+    uint256 rateUSDCtoBCY;
+    uint256 rateWBTCtoBCY;
+
     // @TODO maybe simplify like this
     struct CurrencyStats {
         address exchangeContract;
@@ -616,28 +621,43 @@ contract SwarmPoweredFundraise is Ownable {
         return 0;
     }
 
-    // call this function when you want to use isop
-    function stakeAndMint(address ISOP) external returns (bool) {
-        address[] memory a;
-        stakeAndMint(ISOP, a);
+
+    // @TODO stakeAndMint without IssuerStakeOfferPool
+    // @TODO think more about this flow...
+    // Note that this function assumes that the Token Issuer has acquired SWM by
+    // some other means... it does not facilitate him using fundraising proceeds
+    // to get SWM
+    function stakeAndMint() public returns (bool) {
+        finishFundraising();        
+        require(isFinished);
+
+        uint256 numSRC20Tokens = totalTokenAmount > 0 ? totalTokenAmount : fundraiseAmountBCY / tokenPriceBCY;
+        // Stake and mint
+        IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
+
+        // Withdraw the ETH and the Tokens
+        // @TODO limit this to fundraiseAmountBCY
+        issuerWallet.transfer(qualifiedSums[zeroAddr]);
+        IERC20(erc20DAI).transfer(issuerWallet, qualifiedSums[erc20DAI]);
+        IERC20(erc20USDC).transfer(issuerWallet, qualifiedSums[erc20USDC]);
+        IERC20(erc20WBTC).transfer(issuerWallet, qualifiedSums[erc20WBTC]);
 
         return true;
     }
 
-    // @TODO add missing function for calling Stake and Mint with own tokens
+    // call this function when you want to use ISOP and let it choose providers
+    function stakeAndMint(address ISOP) external returns (bool) {
+        // we just create an empty list and call the worker function with that
+        address[] memory a;
+        stakeAndMint(ISOP, a);
+        return true;
+    }
 
     // call this function when you want to use ISOP with specific providers
     function stakeAndMint(address ISOP, address[] memory addressList) public returns (bool) {
-        require(isFinished);
-
-        // Mint
-        uint256 totalContributionsBCY = toBCY(qualifiedSums[zeroAddr], zeroAddr) +
-                                        toBCY(qualifiedSums[erc20DAI], erc20DAI) +
-                                        toBCY(qualifiedSums[erc20USDC], erc20USDC) +
-                                        toBCY(qualifiedSums[erc20WBTC], erc20WBTC);
-
         // This has all the conditions and will blow up if they are not met
         finishFundraising();
+        require(isFinished);
 
         // @TODO convert all to SafeMath when happy with logic
         // @TODO Update the NAV
@@ -657,10 +677,10 @@ contract SwarmPoweredFundraise is Ownable {
         // this needs to be called by ISOP, because ISOP is owner of the tokens
         IERC20(SwarmERC20).approve(minter, swmAmount);
 
-        uint256 numSRC20Tokens = totalTokenAmount > 0 ? totalTokenAmount : totalContributionsBCY / tokenPriceBCY;
+        uint256 numSRC20Tokens = totalTokenAmount > 0 ? totalTokenAmount : fundraiseAmountBCY / tokenPriceBCY;
+        // Stake and mint
         IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
 
-        // Withdraw
         // Withdraw accepted ETH, minus the amount spent to buy SWM tokens
         issuerWallet.transfer(qualifiedSums[zeroAddr] - priceETH);
 
@@ -705,24 +725,34 @@ contract SwarmPoweredFundraise is Ownable {
         if (currency == baseCurrency)
             return amount;
 
-        // ERC20 - ETH
-        if (baseCurrency == zeroAddr) {
-            amountBCY = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
+        if (rateETHtoBCY != 0) {
+            // ERC20 - ETH
+            if (baseCurrency == zeroAddr) {
+                amountBCY = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
+                return amountBCY;
+            }
+
+            // ETH - ERC20
+            if (currency == zeroAddr) {
+                amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amount);
+                return amountBCY;
+            }
+
+            // ERC20 - ERC20
+            amountETH = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
+            amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amountETH);
             return amountBCY;
         }
 
-        // ETH - ERC20
         if (currency == zeroAddr) {
-            amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amount);
-            return amountBCY;
+            return amount.mul(10 ** 18).div(rateETHtoBCY);
+        } else if (currency == erc20DAI) {
+            return amount.mul(10 ** 18).div(rateDAItoBCY);
+        } else if (currency == erc20USDC) {
+            return amount.mul(10 ** 18).div(rateUSDCtoBCY);
+        } else {
+            return amount.mul(10 ** 18).div(rateWBTCtoBCY);
         }
-
-        // ERC20 - ERC20
-        amountETH = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
-        amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amountETH);
-        return amountBCY;
-
     }
 
-    // @TODO stakeAndMint without IssuerStakeOfferPool
 }

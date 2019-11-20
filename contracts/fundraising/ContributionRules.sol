@@ -17,7 +17,11 @@ contract ContributionRules is IContributionRules {
         minAmount = _minAmount;
     }
 
-    function checkContribution(uint256 amount) external returns (bool) {
-        return amount < maxAmount;
+    function isGreaterThenMax(uint256 amount) external returns (bool, uint256) {
+        return (amount > maxAmount, amount > maxAmount ? amount.sub(amount.sub(maxAmount)) : 0);
+    }
+
+    function isBelowMin(uint256 amount) external returns (bool) {
+        return amount < minAmount;
     }
 }
