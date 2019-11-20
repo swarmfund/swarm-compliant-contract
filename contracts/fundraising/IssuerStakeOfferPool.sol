@@ -61,6 +61,10 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         require(providerCount < maxProviderCount, 'Registration failed: all slots full!');
         // require(markup <= maxMarkup, 'Registration failed: offer smaller markup!');
 
+        // Transfer SWM to the ISOP contract. We need to do this to prevent fake postings
+        require(IERC20(swarmERC20).transferFrom(msg.sender, address(this), swmAmount), 
+                'Registration failed: ERC20 transfer failed!');
+
         _addToList(msg.sender, markup);
         providerList[msg.sender].tokens = swmAmount;
         providerList[msg.sender].markup = markup;
@@ -251,7 +255,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
             tokenValueUSD = tokens * swmPriceUSDnumerator / swmPriceUSDdenominator;
             tokenValueETH = IUniswap(uniswapUSDC).getTokenToEthInputPrice(tokenValueUSD);
 
-            IERC20(swarmERC20).transferFrom(i, msg.sender, tokens);
+            IERC20(swarmERC20).transfer(msg.sender, tokens);
             address(uint160(i)).transfer(tokenValueETH);
 
             i = providerList[i].next;
@@ -267,6 +271,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         return true;
     }
 
+    // Get tokens from one specific account
     function buySWMTokens(address account, uint256 numSWM) public payable returns (bool) {
 
         require(numSWM <= providerList[account].tokens, 'Purchase failed: offerer lacks tokens!');
@@ -285,7 +290,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
 
         require(markup >= providerList[account].markup, 'Purchase failed: offered price too low!');
 
-        require(IERC20(swarmERC20).transferFrom(account, msg.sender, numSWM), "Purchase failed: SWM token transfer failed!");
+        require(IERC20(swarmERC20).transfer(msg.sender, numSWM), "Purchase failed: SWM token transfer failed!");
 
         return true;
     }

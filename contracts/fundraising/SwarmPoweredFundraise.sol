@@ -22,28 +22,39 @@ contract SwarmPoweredFundraise is Ownable {
 
     event Contribution(address indexed from, uint256 amount, uint256 sequence, address baseCurrency);
     event SRC20TokensClaimed(address indexed by, uint256 tokenAllotment);
+    event ContributorWithdrawal(address contributorWallet, address currency, uint256 amount);
+    event IssuerWithdrawal(address issuerWallet, address currency, uint256 amount);
+    event ContributorRemoved(address contributor);
+    event ContributorAccepted(address contributor);
 
     // Setup variables that never change
     string public label;
     address public src20;
     uint256 public tokenAmount;
+    uint256 public totalTokenAmount;
+    uint256 public tokenPriceBCY;
     uint256 public startDate;
     uint256 public endDate;
     uint256 public softCapBCY;
     uint256 public hardCapBCY;
     address public baseCurrency;
+    uint256 public minAmountBCY;
+    uint256 public maxAmountBCY;
+    // variables that do change over time
+    uint256 public fundraiseAmountBCY;
+    uint256 public sequence;
+    uint256 public expirationTime = 7776000; // default: 60 * 60 * 24 * 90 = ~3months
+    uint256 public totalIssuerWithdrawalsBCY;
 
-    uint256 public expirationTime = 7776000; // 60 * 60 * 24 * 90 = ~3months
-
+    bool public isFinished;
     bool public contributionLocking = true;
     bool public offchainContributionsAllowed = false;
 
-    uint256 public minAmountBCY;
-    uint256 public maxAmountBCY;
-    uint256 public tokenPriceBCY;
-    uint256 public totalTokenAmount;
-    uint256 public fundraiseAmountBCY;
-
+    address public contributionRules;
+    address public contributorRestrictions;
+    address public SwarmERC20;
+    address public minter;
+    address payable issuerWallet;
 
     // @TODO pass these as parameters
     // @TODO mapping(uint256 => address) erc20;
@@ -53,15 +64,10 @@ contract SwarmPoweredFundraise is Ownable {
     address erc20WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
     // IAccCurrency - address accCurrency;
 
-    // An Uniswap exchange for each currency
-    mapping(address => address) exchange;
-
     // @TODO abstract away conversions and exchanges to an interface
     // NOTE: bonding curves are not the same as deep markets where any amount barely moves the price
-
-    address SwarmERC20;
-    address minter;
-    address payable issuerWallet;
+    // A register of one Uniswap exchange per each currency
+    mapping(address => address) exchange;
 
     // State variables that change over time
     enum ContributionStatus { Refundable, Refunded, Accepted, Offchain }
@@ -82,41 +88,14 @@ contract SwarmPoweredFundraise is Ownable {
     mapping(address => mapping(address => uint256)) bufferedContributions;
 
     // per contributor and currency, qualified amount
+    // a qualified amount is amount that has passed min/max checks and has been placed in the queue
     mapping(address => mapping(address => uint256)) qualifiedContributions;
 
     // per currency, total qualified sums
     mapping(address => uint256) qualifiedSums;
 
+    // per currency, its final exchange rate to BCY
     mapping(address => uint256) lockedExchangeRate;
-
-    uint256 public sequence;
-
-    bool public isFinished;
-
-    address public contributionRules;
-    address public contributorRestrictions;
-
-    modifier onlyContributorRestrictions() {
-        require(msg.sender == contributorRestrictions);
-        _;
-    }
-
-    // only allow the 4 currencies we accept, otherwise we have a mess downstream
-    modifier onlyAcceptedTokens(address erc20) {
-        require(erc20 == zeroAddr ||
-                erc20 == erc20DAI ||
-                erc20 == erc20USDC ||
-                erc20 == erc20WBTC, 
-                'Unsupported currency');
-        _;
-    }
-
-    uint256 totalIssuerWithdrawalsBCY;
-
-    uint256 rateETHtoBCY;
-    uint256 rateDAItoBCY;
-    uint256 rateUSDCtoBCY;
-    uint256 rateWBTCtoBCY;
 
     // @TODO maybe simplify like this
     struct CurrencyStats {
@@ -139,6 +118,26 @@ contract SwarmPoweredFundraise is Ownable {
     bal[] historicalBalanceWBTC;
 
     mapping( address => bal[] ) historicalBalance;
+
+    // uint256 rateETHtoBCY;
+    // uint256 rateDAItoBCY;
+    // uint256 rateUSDCtoBCY;
+    // uint256 rateWBTCtoBCY;
+
+    modifier onlyContributorRestrictions() {
+        require(msg.sender == contributorRestrictions);
+        _;
+    }
+
+    // only allow the 4 currencies we accept, otherwise we have a mess downstream
+    modifier onlyAcceptedTokens(address erc20) {
+        require(erc20 == zeroAddr ||
+                erc20 == erc20DAI ||
+                erc20 == erc20USDC ||
+                erc20 == erc20WBTC, 
+                'Unsupported currency');
+        _;
+    }
 
     constructor(
         string memory _label,
@@ -350,43 +349,57 @@ contract SwarmPoweredFundraise is Ownable {
     function withdrawContributionETH() external returns (bool) {
         require(isFinished == true && block.timestamp < endDate.add(expirationTime), 'Withdrawal failed: fundraise has not finished');
 
+        uint256 amountWithdrawn;
         for (uint256 i = 0; i < contributionsList[msg.sender].length; i++) {
             if (contributionsList[msg.sender][i].currency != address(0))
                 continue;
             if (contributionsList[msg.sender][i].status != ContributionStatus.Refundable)
                 continue; 
             msg.sender.transfer(contributionsList[msg.sender][i].amount);
-
+            amountWithdrawn += contributionsList[msg.sender][i].amount;
             contributionsList[msg.sender][i].status = ContributionStatus.Refunded;
         }
 
         delete contributionsList[msg.sender];
 
         // withdraw from the buffer too
-        msg.sender.transfer(bufferedContributions[msg.sender][zeroAddr]);
-        bufferedContributions[msg.sender][zeroAddr] = 0;
+        uint256 bufferAmount = bufferedContributions[msg.sender][zeroAddr];
+        if (bufferAmount > 0) {
+            msg.sender.transfer(bufferAmount);
+            amountWithdrawn += bufferAmount;
+            bufferedContributions[msg.sender][zeroAddr] = 0;
+        }
 
+        emit ContributorWithdrawal(msg.sender, zeroAddr, amountWithdrawn);
         return true;
     }
 
-    // Allows contributor to withdraw all his ETH, if this is permitted by the state of the Fundraise
-    // Only allow withdrawing of the contributions that are not: Refunded, Accepted, Offchain
+    // Allows contributor to withdraw all his ERC20 tokens, if this is permitted by the state of the Fundraise
+    // Only allow withdrawing of the contributions that are not: Refunded, Accepted, Offchain, or
+    // Are still buffered/pending
     function withdrawContributionToken() external returns (bool) {
-        require(isFinished == true && block.timestamp < endDate.add(expirationTime), 'Withdrawal failed: fundraise has not finished');
+        require(isFinished == true && block.timestamp < endDate.add(expirationTime), 
+                'Withdrawal failed: fundraise has not finished');
+
+        uint256 amountWithdrawnDAI;
+        uint256 amountWithdrawnUSDC;
+        uint256 amountWithdrawnWBTC;
 
         for (uint256 i = 0; i < contributionsList[msg.sender].length; i++) {
-            if (contributionsList[msg.sender][i].currency == address(0))
+            uint256 amount = contributionsList[msg.sender][i].amount;
+            address currency = contributionsList[msg.sender][i].currency;
+            ContributionStatus status = contributionsList[msg.sender][i].status;
+            
+            if (currency == address(0) || status != ContributionStatus.Refundable)
                 continue;
-            if (contributionsList[msg.sender][i].status != ContributionStatus.Refundable)
-                continue; 
-            // Transfer from
-            require(IERC20(contributionsList[msg.sender][i].currency).transferFrom(
-                    address(this),
-                    msg.sender,
-                    contributionsList[msg.sender][i].amount),
-                'ERC20 transfer failed!');
+
+            require(IERC20(currency).transferFrom(address(this), msg.sender, amount),
+                    'ERC20 transfer failed!');
 
             contributionsList[msg.sender][i].status = ContributionStatus.Refunded;
+            if (currency == erc20DAI) amountWithdrawnDAI += amount;
+            if (currency == erc20USDC) amountWithdrawnUSDC += amount;
+            if (currency == erc20WBTC) amountWithdrawnWBTC += amount;
         }
 
         delete contributionsList[msg.sender];
@@ -395,17 +408,24 @@ contract SwarmPoweredFundraise is Ownable {
         if (bufferedContributions[msg.sender][erc20DAI] > 0)
             require(IERC20(erc20DAI).transferFrom(address(this),msg.sender,bufferedContributions[msg.sender][erc20DAI]),
                     'ERC20 transfer failed!');
+        amountWithdrawnDAI += bufferedContributions[msg.sender][erc20DAI];
         bufferedContributions[msg.sender][erc20DAI] = 0;
 
         if (bufferedContributions[msg.sender][erc20USDC] > 0)
             require(IERC20(erc20USDC).transferFrom(address(this),msg.sender,bufferedContributions[msg.sender][erc20USDC]),
                     'ERC20 transfer failed!');
+        amountWithdrawnUSDC += bufferedContributions[msg.sender][erc20USDC];
         bufferedContributions[msg.sender][erc20USDC] = 0;
 
         if (bufferedContributions[msg.sender][erc20WBTC] > 0)
             require(IERC20(erc20WBTC).transferFrom(address(this),msg.sender,bufferedContributions[msg.sender][erc20WBTC]),
                     'ERC20 transfer failed!');
+        amountWithdrawnWBTC += bufferedContributions[msg.sender][erc20WBTC];
         bufferedContributions[msg.sender][erc20WBTC] = 0;
+
+        emit ContributorWithdrawal(msg.sender, erc20DAI, amountWithdrawnDAI);
+        emit ContributorWithdrawal(msg.sender, erc20USDC, amountWithdrawnUSDC);
+        emit ContributorWithdrawal(msg.sender, erc20WBTC, amountWithdrawnWBTC);
 
         return true;
     }
@@ -442,7 +462,7 @@ contract SwarmPoweredFundraise is Ownable {
         lockedExchangeRate[erc20WBTC] = toBCY( 1, erc20WBTC );
 
         // find out the token price 
-        // @TODO include Presale in this        
+        // @TODO include Presale in this
         tokenPriceBCY = tokenPriceBCY > 0 ? tokenPriceBCY : fundraiseAmountBCY / totalTokenAmount;
 
         isFinished = true;
@@ -493,6 +513,7 @@ contract SwarmPoweredFundraise is Ownable {
         addContribution(contributor, erc20USDC, bufferedContributions[contributor][erc20USDC]);
         addContribution(contributor, erc20WBTC, bufferedContributions[contributor][erc20WBTC]);
 
+        emit ContributorAccepted(contributor);
         return true;
     }
 
@@ -517,7 +538,7 @@ contract SwarmPoweredFundraise is Ownable {
         // NOTE: we'll actually leave global sums as they are, as they need to stay the same for historical
         // balances to work
 
-        // get the value in BCY of his previous qualified contributions
+        // get the value in BCY of his qualified contributions (that we shall give back)
         uint256 contributionsBCY = toBCY( qualifiedContributions[contributor][zeroAddr], zeroAddr) +
                                    toBCY( qualifiedContributions[contributor][erc20DAI], erc20DAI) +
                                    toBCY( qualifiedContributions[contributor][erc20USDC], erc20USDC) +
@@ -527,6 +548,7 @@ contract SwarmPoweredFundraise is Ownable {
         softCapBCY = softCapBCY + contributionsBCY;
         hardCapBCY = hardCapBCY + contributionsBCY;
 
+        emit ContributorRemoved(contributor);
         return true;
     }
 
@@ -535,7 +557,7 @@ contract SwarmPoweredFundraise is Ownable {
         return val1; // valjda je ovo ok....
     }
 
-    // return the balance at the time of the sequence passed as parameter
+    // return the balance in _currency at the time of the _sequence
     function getHistoricalBalance(uint256 _sequence, address _currency) public view returns (uint256) {
         bal[] memory arr;
         if (_currency == zeroAddr) {
@@ -591,6 +613,7 @@ contract SwarmPoweredFundraise is Ownable {
             if (contributionsList[msg.sender][i].status != ContributionStatus.Refundable)
                 continue;
 
+            // we change to accepted... but could also be deleting
             contributionsList[msg.sender][i].status = ContributionStatus.Accepted;
 
             uint256 historicalBalanceBCY = toBCY( getHistoricalBalance(i, zeroAddr), zeroAddr) + 
@@ -608,7 +631,7 @@ contract SwarmPoweredFundraise is Ownable {
             else { // ...or just a part of it
                 totalContributorAcceptedBCY += fundraiseAmountBCY - historicalBalanceBCY;
                 uint256 refund = historicalBalanceBCY + contributionBCY - fundraiseAmountBCY;
-                bufferedContributions[msg.sender][contributionsList[msg.sender][i].currency] += refund; 
+                bufferedContributions[msg.sender][contributionsList[msg.sender][i].currency] += refund;
                 break; // we've hit the end, break from the loop
             }
 
@@ -618,28 +641,6 @@ contract SwarmPoweredFundraise is Ownable {
         ISRC20(src20).transfer(msg.sender, tokenAllotment);
         emit SRC20TokensClaimed(msg.sender, tokenAllotment);
         return 0;
-    }
-
-    // StakeAndMint without IssuerStakeOfferPool
-    // Note that this function assumes that the Token Issuer has acquired SWM by
-    // some other means... it does not facilitate him using fundraising proceeds
-    // to get SWM
-    // @TODO think more about this flow...
-    function stakeAndMint() public returns (bool) {
-        finishFundraising();        
-        require(isFinished);
-
-        uint256 numSRC20Tokens = totalTokenAmount > 0 ? totalTokenAmount : fundraiseAmountBCY / tokenPriceBCY;
-        // Stake and mint
-        IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
-
-        // Withdraw the ETH and the Tokens
-        processIssuerWithdrawal(zeroAddr);
-        processIssuerWithdrawal(erc20DAI);
-        processIssuerWithdrawal(erc20USDC);
-        processIssuerWithdrawal(erc20WBTC);
-
-        return true;
     }
 
     // process a withdrawal by the Issuer, making sure not more than the correct
@@ -661,6 +662,29 @@ contract SwarmPoweredFundraise is Ownable {
             issuerWallet.transfer(amount);
         else
             IERC20(currency).transfer(issuerWallet, amount);
+
+        emit IssuerWithdrawal(issuerWallet, currency, amount);
+        return true;
+    }
+
+    // Call this function when you want to StakeAndMint without IssuerStakeOfferPool
+    // Note that this function assumes that the Token Issuer has acquired SWM by
+    // some other means and put them on the account of the Fundraise contract... it 
+    // does not facilitate him using fundraising proceeds to get SWM
+    // @TODO think more about this flow...
+    function stakeAndMint() public returns (bool) {
+        finishFundraising();        
+        require(isFinished);
+
+        uint256 numSRC20Tokens = totalTokenAmount > 0 ? totalTokenAmount : fundraiseAmountBCY / tokenPriceBCY;
+        // Stake and mint
+        IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
+
+        // Withdraw the ETH and the Tokens
+        processIssuerWithdrawal(zeroAddr);
+        processIssuerWithdrawal(erc20DAI);
+        processIssuerWithdrawal(erc20USDC);
+        processIssuerWithdrawal(erc20WBTC);
 
         return true;
     }
@@ -761,35 +785,33 @@ contract SwarmPoweredFundraise is Ownable {
         if (currency == baseCurrency)
             return amount;
 
-        if (rateETHtoBCY != 0) {
-            // ERC20 - ETH
-            if (baseCurrency == zeroAddr) {
-                amountBCY = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
-                return amountBCY;
-            }
-
-            // ETH - ERC20
-            if (currency == zeroAddr) {
-                amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amount);
-                return amountBCY;
-            }
-
-            // ERC20 - ERC20
-            amountETH = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
-            amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amountETH);
+        // ERC20 - ETH
+        if (baseCurrency == zeroAddr) {
+            amountBCY = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
             return amountBCY;
         }
 
-        // @TODO what is this?
+        // ETH - ERC20
         if (currency == zeroAddr) {
-            return amount.mul(10 ** 18).div(rateETHtoBCY);
-        } else if (currency == erc20DAI) {
-            return amount.mul(10 ** 18).div(rateDAItoBCY);
-        } else if (currency == erc20USDC) {
-            return amount.mul(10 ** 18).div(rateUSDCtoBCY);
-        } else {
-            return amount.mul(10 ** 18).div(rateWBTCtoBCY);
+            amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amount);
+            return amountBCY;
         }
+
+        // ERC20 - ERC20
+        amountETH = IUniswap(exchange[currency]).getTokenToEthInputPrice(amount);
+        amountBCY = IUniswap(exchange[baseCurrency]).getEthToTokenInputPrice(amountETH);
+        return amountBCY;
+
+        // @TODO what is this?
+        // if (currency == zeroAddr) {
+        //     return amount.mul(10 ** 18).div(rateETHtoBCY);
+        // } else if (currency == erc20DAI) {
+        //     return amount.mul(10 ** 18).div(rateDAItoBCY);
+        // } else if (currency == erc20USDC) {
+        //     return amount.mul(10 ** 18).div(rateUSDCtoBCY);
+        // } else {
+        //     return amount.mul(10 ** 18).div(rateWBTCtoBCY);
+        // }
     }
 
 }
