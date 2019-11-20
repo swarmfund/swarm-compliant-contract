@@ -18,8 +18,10 @@ import "../interfaces/ISRC20.sol";
 contract SwarmPoweredFundraise is Ownable {
 
     using SafeMath for uint256;
+    // @TODO convert all math in the contract to SafeMath when happy with logic
 
     event Contribution(address indexed from, uint256 amount, uint256 sequence, address baseCurrency);
+    event SRC20TokensClaimed(address indexed by, uint256 tokenAllotment);
 
     // Setup variables that never change
     string public label;
@@ -72,13 +74,17 @@ contract SwarmPoweredFundraise is Ownable {
     }
 
     // @TODO maybe rename to contributionsQueue?
+    // per contributor, iterable list of his contributions
     mapping(address => contribution[]) contributionsList; 
 
-    // @TODO think about pending vs buffered
+    // @TODO think about naming: pending vs buffered
+    // per contributor and currency, pending amount
     mapping(address => mapping(address => uint256)) bufferedContributions;
 
+    // per contributor and currency, qualified amount
     mapping(address => mapping(address => uint256)) qualifiedContributions;
 
+    // per currency, total qualified sums
     mapping(address => uint256) qualifiedSums;
 
     mapping(address => uint256) lockedExchangeRate;
@@ -95,7 +101,7 @@ contract SwarmPoweredFundraise is Ownable {
         _;
     }
 
-    // @TODO only allow the 4 currencies we accept, otherwise we have a mess downstream
+    // only allow the 4 currencies we accept, otherwise we have a mess downstream
     modifier onlyAcceptedTokens(address erc20) {
         require(erc20 == zeroAddr ||
                 erc20 == erc20DAI ||
@@ -262,7 +268,7 @@ contract SwarmPoweredFundraise is Ownable {
         emit Contribution(contributor, qualifiedAmount, sequence, erc20);
     }
 
-    // Allows Token Issuer to add a contribution to the fundraise's accounting
+    // Allows Token Issuer to add a contribution to the fundraise contract's accounting
     // in the case he received an offchain contribution, for example
     function addOffchainContribution(address contributor, address erc20, uint256 amount) 
              public onlyAcceptedTokens(erc20) returns (bool) {
@@ -271,6 +277,10 @@ contract SwarmPoweredFundraise is Ownable {
 
         // whitelist the contributor
         IContributorRestrictions(contributorRestrictions).whitelistAccount(contributor);
+
+        // we've just whitelisted him but still need to check...?
+        // for example it could be that max number of contributors has been exceeded
+        IContributorRestrictions(contributorRestrictions).isAllowed(contributor);
 
         // add the contribution to the buffer
         bufferedContributions[contributor][erc20] += amount;
@@ -360,7 +370,7 @@ contract SwarmPoweredFundraise is Ownable {
     }
 
     // Allows contributor to withdraw all his ETH, if this is permitted by the state of the Fundraise
-    // @TODO only allow withdrawing of the amounts we didn't accept
+    // Only allow withdrawing of the contributions that are not: Refunded, Accepted, Offchain
     function withdrawContributionToken() external returns (bool) {
         require(isFinished == true && block.timestamp < endDate.add(expirationTime), 'Withdrawal failed: fundraise has not finished');
 
@@ -431,7 +441,9 @@ contract SwarmPoweredFundraise is Ownable {
         lockedExchangeRate[erc20USDC] = toBCY( 1, erc20USDC );
         lockedExchangeRate[erc20WBTC] = toBCY( 1, erc20WBTC );
 
-        // @TODO fix token price
+        // find out the token price 
+        // @TODO include Presale in this        
+        tokenPriceBCY = tokenPriceBCY > 0 ? tokenPriceBCY : fundraiseAmountBCY / totalTokenAmount;
 
         isFinished = true;
         return true;
@@ -581,11 +593,10 @@ contract SwarmPoweredFundraise is Ownable {
 
             contributionsList[msg.sender][i].status = ContributionStatus.Accepted;
 
-            uint256 historicalBalanceBCY = 
-                toBCY( getHistoricalBalance(i, zeroAddr), zeroAddr) + 
-                toBCY( getHistoricalBalance(i, erc20DAI), erc20DAI) + 
-                toBCY( getHistoricalBalance(i, erc20USDC), erc20USDC) + 
-                toBCY( getHistoricalBalance(i, erc20WBTC), erc20WBTC);
+            uint256 historicalBalanceBCY = toBCY( getHistoricalBalance(i, zeroAddr), zeroAddr) + 
+                                           toBCY( getHistoricalBalance(i, erc20DAI), erc20DAI) + 
+                                           toBCY( getHistoricalBalance(i, erc20USDC), erc20USDC) + 
+                                           toBCY( getHistoricalBalance(i, erc20WBTC), erc20WBTC);
 
             uint256 contributionBCY = toBCY(contributionsList[msg.sender][i].amount,
                                             contributionsList[msg.sender][i].currency);
@@ -602,23 +613,18 @@ contract SwarmPoweredFundraise is Ownable {
             }
 
         }
-
-        // find out the token price @TODO, this is global, remove from function and put
-        // into StakeAndMint or finishFundraise
-        // @TODO include Presale in this
-        
-        tokenPriceBCY = tokenPriceBCY > 0 ? tokenPriceBCY : totalContributorAcceptedBCY / totalTokenAmount;
         
         uint256 tokenAllotment = totalContributorAcceptedBCY / tokenPriceBCY;
         ISRC20(src20).transfer(msg.sender, tokenAllotment);
+        emit SRC20TokensClaimed(msg.sender, tokenAllotment);
         return 0;
     }
 
-    // @TODO stakeAndMint without IssuerStakeOfferPool
-    // @TODO think more about this flow...
+    // StakeAndMint without IssuerStakeOfferPool
     // Note that this function assumes that the Token Issuer has acquired SWM by
     // some other means... it does not facilitate him using fundraising proceeds
     // to get SWM
+    // @TODO think more about this flow...
     function stakeAndMint() public returns (bool) {
         finishFundraising();        
         require(isFinished);
@@ -660,34 +666,54 @@ contract SwarmPoweredFundraise is Ownable {
     }
 
     // call this function when you want to use ISOP and let it choose providers
-    function stakeAndMint(address ISOP) external returns (bool) {
+    function stakeAndMint(address ISOP, uint256 maxMarkup) external returns (bool) {
         // we just create an empty list and call the worker function with that
         address[] memory a;
-        stakeAndMint(ISOP, a);
+        stakeAndMint(ISOP, a, maxMarkup);
         return true;
     }
 
     // call this function when you want to use ISOP with specific providers
-    function stakeAndMint(address ISOP, address[] memory addressList) public returns (bool) {
+    function stakeAndMint(address ISOP, address[] memory addressList, uint256 maxMarkup) public returns (bool) {
         // This has all the conditions and will blow up if they are not met
         finishFundraising();
         require(isFinished);
 
-        // @TODO convert all to SafeMath when happy with logic
         // @TODO Update the NAV
         // assetRegistry.updateNetAssetValueUSD(src20, netAssetValueUSD);
         uint256 netAssetValueUSD = toUSD(fundraiseAmountBCY);
         uint256 swmAmount = IGetRateMinter(minter).calcStake(netAssetValueUSD);
 
-        // Collect the SWM tokens from ISOP. For now we don't loop but only have
-        // One provider, chosen by the Token Issuer
-        // @TODO loop through providers
-        address swmProvider = addressList[0];
-        uint256 priceETH = IIssuerStakeOfferPool(ISOP).getSWMPriceETH(swmProvider, swmAmount);
-        IIssuerStakeOfferPool(ISOP).buySWMTokens.value(priceETH)(swmProvider, swmAmount);
+        // If we passed an empty array, that is, if we want to use the providers in the 
+        // order they registered to ISOP
+        
+        uint256 spentETH;
+        uint256 priceETH;
+        if (addressList.length == 0) {
+            priceETH = IIssuerStakeOfferPool(ISOP).loopGetSWMPriceETH(swmAmount, maxMarkup);
+            IIssuerStakeOfferPool(ISOP).loopBuySWMTokens.value(priceETH)(swmAmount, maxMarkup);
+        }
+        else { // loop through the list we got
+           for (uint256 i = 0; i < addressList.length; i++) {
+                 address swmProvider = addressList[i];
 
-        // decrease the balance
-        qualifiedSums[zeroAddr] -= priceETH;
+                // calculate the number of tokens to get from this provider
+                uint256 tokens = swmAmount > IIssuerStakeOfferPool(ISOP).getTokens(swmProvider) ?
+                                 IIssuerStakeOfferPool(ISOP).getTokens(swmProvider) : swmAmount;
+
+                // send ETH and get the tokens
+                priceETH = IIssuerStakeOfferPool(ISOP).getSWMPriceETH(swmProvider, tokens);
+                IIssuerStakeOfferPool(ISOP).buySWMTokens.value(priceETH)(swmProvider, tokens);
+
+                // reduce the number we still need to get by the amount we just got
+                swmAmount -= tokens;
+                // increase the counter of ETH we spent
+                spentETH += priceETH;
+           }
+        }
+
+        // decrease the global ETH balance
+        qualifiedSums[zeroAddr] -= spentETH; priceETH;
 
         // SWM are on the Fundraise contract, approve the minter to spend them
 
@@ -724,7 +750,7 @@ contract SwarmPoweredFundraise is Ownable {
     // Convert an amount in currency into an amount in base currency
     function toBCY(uint256 amount, address currency) public returns (uint256) {
 
-        // @TODO return locked rates if the Fundraise finished
+        // return locked rates if the Fundraise finished
         if(isFinished)
             return lockedExchangeRate[currency] * amount;
 

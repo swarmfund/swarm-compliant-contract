@@ -176,14 +176,45 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         return providerList[account].tokens > 0;
     }
 
+    // getter for number of tokens
+    function getTokens(address account) external view returns (uint256) {
+        return providerList[account].tokens;
+    }
+
     // Get how much ETH we need to spend to get numSWM from a specific account
     // Get the market price of SWM and apply the account's markup
-    function getSWMPriceETH(address account, uint256 numSWM) external returns (uint256) {
+    function getSWMPriceETH(address account, uint256 numSWM) public returns (uint256) {
         (uint256 swmPriceUSDnumerator, uint256 swmPriceUSDdenominator) = IPriceUSD(swmPriceOracle).getPrice();
         uint256 requiredUSD = numSWM * swmPriceUSDnumerator / swmPriceUSDdenominator;
         uint256 requiredETH = IUniswap(uniswapUSDC).getEthToTokenOutputPrice(requiredUSD);
         return requiredETH * providerList[account].markup;
         // @TODO their need to be some kind of precisions
+    }
+
+    // Loop to find out how much ETH we have to spend
+    function loopGetSWMPriceETH(uint256 _swmAmount, uint256 _maxMarkup) public returns (uint256) {
+
+        uint256 tokens;
+        uint256 priceETH;
+        uint256 tokensCollected;
+        address i = head;
+        while (i != address(0)) {
+            // If this one is too expensive, skip to the next
+            if (providerList[i].markup > _maxMarkup)
+                i = providerList[i].next;
+
+            // Take all his tokens, or only a part of them
+            tokens = _swmAmount - tokensCollected >= providerList[i].tokens ?
+                     providerList[i].tokens : _swmAmount - tokensCollected;
+
+            tokensCollected += tokens;
+            priceETH += getSWMPriceETH(i, tokens);
+        }
+
+        // Or, if we have not collected enough, return 0? @TODO think about this
+        require(tokensCollected == _swmAmount, 'Not enough SWM on the ISOP contract match your criteria!');
+
+        return priceETH;
     }
 
     // Loop through the linked list of providers, buy SWM tokens from them until we have enough
@@ -206,21 +237,14 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         while (i != address(0)) {
 
             // If this one is too expensive, skip to the next
-            //            if (providerList[i].markup > maxMarkup) {
-            //                i = providerList[i].next;
-            //                continue;
-            //            }
-            // no need for this, we have require at register
-
-            // Take all his tokens, or only a part of them
-            if (numSWM - tokensCollected >= providerList[i].tokens) {
-                tokens = providerList[i].tokens;
-            } else {
-                tokens = numSWM - tokensCollected;
+            if (providerList[i].markup > _maxMarkup) {
+                i = providerList[i].next;
+                continue;
             }
 
-            //            tokens = numSWM - tokensCollected >= providerList[i].tokens ?
-            //                     providerList[i].tokens : numSWM - tokensCollected;
+            // Take all his tokens, or only a part of them
+            tokens = numSWM - tokensCollected >= providerList[i].tokens ?
+                     providerList[i].tokens : numSWM - tokensCollected;
 
             tokensCollected = tokensCollected + tokens;
 
