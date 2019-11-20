@@ -14,7 +14,7 @@ contract ContributorRestrictions is IContributorRestrictions, ContributorWhiteli
         _fundraising = fundraising;
     }
 
-    function checkContributor(address account) external view returns (bool) {
+    function isAllowed(address account) external view returns (bool) {
         return _whitelisted[account];
     }
 

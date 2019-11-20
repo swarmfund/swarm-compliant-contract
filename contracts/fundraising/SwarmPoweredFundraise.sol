@@ -103,6 +103,8 @@ contract SwarmPoweredFundraise is Ownable {
         _;
     }
 
+    uint256 totalIssuerWithdrawalsBCY;
+
     uint256 rateETHtoBCY;
     uint256 rateDAItoBCY;
     uint256 rateUSDCtoBCY;
@@ -149,9 +151,9 @@ contract SwarmPoweredFundraise is Ownable {
         hardCapBCY = _hardCapBCY;
 
         require(_baseCurrency == erc20DAI ||
-        _baseCurrency == erc20USDC ||
-        _baseCurrency == erc20WBTC ||
-        _baseCurrency == zeroAddr, 'Unsupported base currency');
+                _baseCurrency == erc20USDC ||
+                _baseCurrency == erc20WBTC ||
+                _baseCurrency == zeroAddr, 'Unsupported base currency');
 
         baseCurrency = _baseCurrency;
 
@@ -212,7 +214,7 @@ contract SwarmPoweredFundraise is Ownable {
         uint256 previousContributionsBCY = toBCY( qualifiedContributions[contributor][zeroAddr], zeroAddr) +
                                            toBCY( qualifiedContributions[contributor][erc20DAI], erc20DAI) +
                                            toBCY( qualifiedContributions[contributor][erc20USDC], erc20USDC) +
-                                          toBCY( qualifiedContributions[contributor][erc20WBTC], erc20WBTC);
+                                           toBCY( qualifiedContributions[contributor][erc20WBTC], erc20WBTC);
 
         // get the total with this contribution
         uint256 totalContributionsBCY = previousContributionsBCY + amountBCY;
@@ -270,8 +272,8 @@ contract SwarmPoweredFundraise is Ownable {
     function addOffchainContribution(address contributor, address erc20, uint256 amount) 
              public onlyAcceptedTokens(erc20) returns (bool) {
 
-        // Check if contributor on whitelist
-        if (IContributorRestrictions(contributorRestrictions).checkContributor(contributor) == false)
+        // Check if the contributor is allowed to participate, if not, exit
+        if (IContributorRestrictions(contributorRestrictions).isAllowed(contributor) == false)
             return true;
 
         uint256 amountBCY = toBCY(amount, erc20);
@@ -310,7 +312,7 @@ contract SwarmPoweredFundraise is Ownable {
         bufferedContributions[contributor][erc20] += amount;
 
         // Check if contributor on whitelist
-        if (IContributorRestrictions(contributorRestrictions).checkContributor(contributor) == false)
+        if (IContributorRestrictions(contributorRestrictions).isAllowed(contributor) == false)
             return true;
 
         // If he already has some qualified contributions, just process the new one
@@ -382,7 +384,6 @@ contract SwarmPoweredFundraise is Ownable {
                 'ERC20 transfer failed!');
             
             contributionsList[msg.sender][i].status = ContributionStatus.Refunded;
-
         }
 
         delete contributionsList[msg.sender];
@@ -468,10 +469,8 @@ contract SwarmPoweredFundraise is Ownable {
     }
 
     function _acceptContributor(address contributor) internal returns (bool) {
-        // Check if contributor on whitelist
-        require(IContributorRestrictions(contributorRestrictions).checkContributor(contributor));
-        //  @TODO change name to: isRestricted // isAllowed //isPermitted // 
-        //                        isVerified // checksOut // contributorAllowed // contributionAllowed
+        // Check whether the contributor is restricted
+        require(IContributorRestrictions(contributorRestrictions).isAllowed(contributor));
 
         // get the value in BCY of his buffered contributions
         uint256 totalBufferedBCY = toBCY( bufferedContributions[contributor][zeroAddr], zeroAddr) +
@@ -496,7 +495,7 @@ contract SwarmPoweredFundraise is Ownable {
     //       probably not, eh?
     function _rejectContributor(address contributor) internal returns (bool) {
         // make sure he is not on whitelist, if he is he can't be rejected
-        require(!IContributorRestrictions(contributorRestrictions).checkContributor(contributor));
+        require(!IContributorRestrictions(contributorRestrictions).isAllowed(contributor));
 
         // remove his contributions from the queue
         delete( contributionsList[msg.sender] );
@@ -636,11 +635,33 @@ contract SwarmPoweredFundraise is Ownable {
         IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
 
         // Withdraw the ETH and the Tokens
-        // @TODO limit this to fundraiseAmountBCY
-        issuerWallet.transfer(qualifiedSums[zeroAddr]);
-        IERC20(erc20DAI).transfer(issuerWallet, qualifiedSums[erc20DAI]);
-        IERC20(erc20USDC).transfer(issuerWallet, qualifiedSums[erc20USDC]);
-        IERC20(erc20WBTC).transfer(issuerWallet, qualifiedSums[erc20WBTC]);
+        processIssuerWithdrawal(zeroAddr);
+        processIssuerWithdrawal(erc20DAI);
+        processIssuerWithdrawal(erc20USDC);
+        processIssuerWithdrawal(erc20WBTC);
+
+        return true;
+    }
+
+    // process a withdrawal by the Issuer, making sure not more than the correct
+    // amount is taken
+    function processIssuerWithdrawal(address currency) internal returns (bool) {
+        
+        uint256 amount = qualifiedSums[currency];
+        uint256 amountBCY = toBCY(qualifiedSums[currency], currency);
+        if (totalIssuerWithdrawalsBCY + amountBCY > fundraiseAmountBCY) {
+            amount = qualifiedSums[currency] *
+                     (fundraiseAmountBCY - totalIssuerWithdrawalsBCY) / amountBCY;
+            amountBCY = toBCY(amount, currency);
+        }
+
+        qualifiedSums[currency] -= amount;
+        totalIssuerWithdrawalsBCY += amountBCY;
+
+        if (currency == zeroAddr)
+            issuerWallet.transfer(amount);
+        else
+            IERC20(currency).transfer(issuerWallet, amount);
 
         return true;
     }
@@ -672,6 +693,9 @@ contract SwarmPoweredFundraise is Ownable {
         uint256 priceETH = IIssuerStakeOfferPool(ISOP).getSWMPriceETH(swmProvider, swmAmount);
         IIssuerStakeOfferPool(ISOP).buySWMTokens.value(priceETH)(swmProvider, swmAmount);
 
+        // decrease the balance
+        qualifiedSums[zeroAddr] -= priceETH;
+        
         // SWM are on the Fundraise contract, approve the minter to spend them
 
         // this needs to be called by ISOP, because ISOP is owner of the tokens
@@ -681,17 +705,11 @@ contract SwarmPoweredFundraise is Ownable {
         // Stake and mint
         IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
 
-        // Withdraw accepted ETH, minus the amount spent to buy SWM tokens
-        issuerWallet.transfer(qualifiedSums[zeroAddr] - priceETH);
-
-        // Withdraw accepted DAI
-        IERC20(erc20DAI).transfer(issuerWallet, qualifiedSums[erc20DAI]);
-
-        // Withdraw accepted USDC
-        IERC20(erc20USDC).transfer(issuerWallet, qualifiedSums[erc20USDC]);
-
-        // Withdraw accepted WBTC
-        IERC20(erc20WBTC).transfer(issuerWallet, qualifiedSums[erc20WBTC]);
+        // Withdraw the ETH and the Tokens
+        processIssuerWithdrawal(zeroAddr);
+        processIssuerWithdrawal(erc20DAI);
+        processIssuerWithdrawal(erc20USDC);
+        processIssuerWithdrawal(erc20WBTC);
 
         return true;
 
@@ -744,6 +762,7 @@ contract SwarmPoweredFundraise is Ownable {
             return amountBCY;
         }
 
+        // @TODO what is this?
         if (currency == zeroAddr) {
             return amount.mul(10 ** 18).div(rateETHtoBCY);
         } else if (currency == erc20DAI) {
