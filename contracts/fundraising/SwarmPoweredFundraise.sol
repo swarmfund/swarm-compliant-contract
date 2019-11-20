@@ -34,6 +34,7 @@ contract SwarmPoweredFundraise is Ownable {
     uint256 public expirationTime = 7776000; // 60 * 60 * 24 * 90 = ~3months
 
     bool public contributionLocking = true;
+    bool public offchainContributionsAllowed = false;
 
     uint256 public minAmountBCY;
     uint256 public maxAmountBCY;
@@ -62,6 +63,7 @@ contract SwarmPoweredFundraise is Ownable {
 
     // State variables that change over time
     enum ContributionStatus { Refundable, Refunded, Accepted, Offchain }
+
     struct contribution {
         address currency;
         uint256 amount;
@@ -235,12 +237,12 @@ contract SwarmPoweredFundraise is Ownable {
             qualifiedAmount = (maxAmountBCY - previousContributionsBCY) / amountBCY
                             * amount;
         }
-        else 
+        else
             qualifiedAmount = amount;
-        
+
         // leave the extra in the buffer, get the all the rest
         bufferedContributions[contributor][erc20] -= qualifiedAmount;
-        
+
         contribution memory c;
         sequence++;
         c.currency = erc20;
@@ -262,36 +264,24 @@ contract SwarmPoweredFundraise is Ownable {
 
     // Allows Token Issuer to add a contribution to the fundraise's accounting
     // in the case he received an offchain contribution, for example
-    // It still has to respect min and max amounts
-    // @TODO check whether this can be done multiple times and whether the queue
-    //       has to be respected in that case
-    // @TODO check whether it is fine offchain people can get refunds at any time,
-    //       while the onchain guys must wait or never get them
-    // @TODO check whether it is OK to require the adding to whitelist to be a
-    //       separate step
     function addOffchainContribution(address contributor, address erc20, uint256 amount) 
              public onlyAcceptedTokens(erc20) returns (bool) {
 
-        // Check if the contributor is allowed to participate, if not, exit
-        if (IContributorRestrictions(contributorRestrictions).isAllowed(contributor) == false)
-            return true;
+        require(offchainContributionsAllowed, 'Offchain contribution failed: not allowed by setup!');
 
-        uint256 amountBCY = toBCY(amount, erc20);
+        // whitelist the contributor
+        IContributorRestrictions(contributorRestrictions).whitelistAccount(contributor);
 
-        require(amountBCY > minAmountBCY, 'Contribution failed: amount less than minAmount!');
-        require(IERC20(erc20).transferFrom(contributor, address(this), amount), 
-            'Contribution failed: ERC20 transfer failed!');
-        
+        // add the contribution to the buffer
+        bufferedContributions[contributor][erc20] += amount;
+
         // add the contribution to the queue
         addContribution(contributor, erc20, amount);
-        
+
         // set up the contribution we have just added so that it can not be withdrawn
         contributionsList[msg.sender][contributionsList[msg.sender].length - 1]
                          .status = ContributionStatus.Offchain;
     }
-
-    // @TODO forceRemoveContribution
-    // The way this would work is with calling _rejectContributor
 
     // @TODO contribute with affiliate links
     function contribute(address erc20, uint256 amount) public onlyAcceptedTokens(erc20) returns (bool) {
@@ -305,8 +295,11 @@ contract SwarmPoweredFundraise is Ownable {
         require((tokenPriceBCY != 0 || totalTokenAmount != 0), "Contribution failed: token price or total token amount are not set");
         require(block.timestamp >= startDate, "Contribution failed: fundraising did not start");
         require(block.timestamp <= endDate, "Contribution failed: fundraising has ended");
-        
-        require(IERC20(erc20).transferFrom(contributor, address(this), amount), 'Contribution failed: ERC20 transfer failed!');
+
+        // @TODO move this one function up
+        if (erc20 != zeroAddr)
+            require(IERC20(erc20).transferFrom(contributor, address(this), amount), 
+                    'Contribution failed: ERC20 transfer failed!');
 
         // add the contribution to the buffer
         bufferedContributions[contributor][erc20] += amount;
@@ -353,7 +346,7 @@ contract SwarmPoweredFundraise is Ownable {
             if (contributionsList[msg.sender][i].status != ContributionStatus.Refundable)
                 continue; 
             msg.sender.transfer(contributionsList[msg.sender][i].amount);
-            
+
             contributionsList[msg.sender][i].status = ContributionStatus.Refunded;
         }
 
@@ -382,7 +375,7 @@ contract SwarmPoweredFundraise is Ownable {
                     msg.sender,
                     contributionsList[msg.sender][i].amount),
                 'ERC20 transfer failed!');
-            
+
             contributionsList[msg.sender][i].status = ContributionStatus.Refunded;
         }
 
@@ -487,13 +480,14 @@ contract SwarmPoweredFundraise is Ownable {
         addContribution(contributor, erc20DAI, bufferedContributions[contributor][erc20DAI]);
         addContribution(contributor, erc20USDC, bufferedContributions[contributor][erc20USDC]);
         addContribution(contributor, erc20WBTC, bufferedContributions[contributor][erc20WBTC]);
-        
+
         return true;
     }
 
-    // @TODO check with business... can Token Issuer do this even after the fundraise is Finished?
-    //       probably not, eh?
     function _rejectContributor(address contributor) internal returns (bool) {
+
+        require(isFinished, 'Cannot remove contributor: fundraise has finished!');
+
         // make sure he is not on whitelist, if he is he can't be rejected
         require(!IContributorRestrictions(contributorRestrictions).isAllowed(contributor));
 
@@ -620,7 +614,6 @@ contract SwarmPoweredFundraise is Ownable {
         return 0;
     }
 
-
     // @TODO stakeAndMint without IssuerStakeOfferPool
     // @TODO think more about this flow...
     // Note that this function assumes that the Token Issuer has acquired SWM by
@@ -695,7 +688,7 @@ contract SwarmPoweredFundraise is Ownable {
 
         // decrease the balance
         qualifiedSums[zeroAddr] -= priceETH;
-        
+
         // SWM are on the Fundraise contract, approve the minter to spend them
 
         // this needs to be called by ISOP, because ISOP is owner of the tokens
@@ -712,7 +705,6 @@ contract SwarmPoweredFundraise is Ownable {
         processIssuerWithdrawal(erc20WBTC);
 
         return true;
-
     }
 
     // convert from base currency to USD
