@@ -134,12 +134,12 @@ contract SwarmPoweredFundraise is Ownable {
     }
 
     // only allow the currencies we accept
-    modifier onlyAcceptedCurrencies(address erc20) {
+    modifier onlyAcceptedCurrencies(address currency) {
         require(
-            erc20 == zeroAddr ||
-            erc20 == erc20DAI ||
-            erc20 == erc20USDC ||
-            erc20 == erc20WBTC, 
+            currency == zeroAddr ||
+            currency == erc20DAI ||
+            currency == erc20USDC ||
+            currency == erc20WBTC, 
             "Unsupported currency"
         );
         _;
@@ -286,6 +286,22 @@ contract SwarmPoweredFundraise is Ownable {
     }
 
     /**
+     *  Loop through currencies and get the value (in BCY) of all the 
+     *  qualified contributions
+     *
+     *  @return sum of all qualified contributions, in all currencies, 
+     *          converted to BCY
+     */
+    function getQualifiedSumsBCY() public returns (uint256) {
+        return(
+            toBCY(qualifiedSums[zeroAddr], zeroAddr) +
+            toBCY(qualifiedSums[erc20DAI], erc20DAI) +
+            toBCY(qualifiedSums[erc20USDC], erc20USDC) +
+            toBCY(qualifiedSums[erc20WBTC], erc20WBTC)
+        );
+    }
+
+    /**
      *  Loop through the accepted currencies and return the sum of historical 
      *  balances at the time of the seq, converted to base currency
      *  @param seq the sequence which we want historical balances for
@@ -299,6 +315,41 @@ contract SwarmPoweredFundraise is Ownable {
             toBCY(getHistoricalBalance(seq, erc20USDC), erc20USDC) + 
             toBCY(getHistoricalBalance(seq, erc20WBTC), erc20WBTC)
         );
+    }
+
+    /**
+     *  Loop through all the buffers (four now, but could be many more eventually) 
+     *  and turn them into qualified contributions.
+     *
+     *  NOTE: this skips the minAmount checks!
+     *  NOTE: the maxAmount check is still performed
+     *
+     *  @param contributor the address of the contributor we are processing
+     *         buffered contributions for
+     *  @return 0 if all the contributions were accepted, overflow if some were above
+     *          maxAmount and were not added
+     */
+    function _addBufferedContributions(address contributor) internal returns (uint256) {
+        uint256 overflow;
+        overflow += _addContribution(contributor, zeroAddr, bufferedContributions[contributor][zeroAddr]);
+        overflow += _addContribution(contributor, erc20DAI, bufferedContributions[contributor][erc20DAI]);
+        overflow += _addContribution(contributor, erc20USDC, bufferedContributions[contributor][erc20USDC]);
+        overflow += _addContribution(contributor, erc20WBTC, bufferedContributions[contributor][erc20WBTC]);
+        return overflow;
+    }
+
+    /**
+     *  Loop through the accepted currencies and initiate a withdrawal for 
+     *  each currency, sending the funds to the Token Issuer
+     *
+     *  @return true on success
+     */
+    function _withdrawRaisedFunds() internal returns (bool) {
+        _processIssuerWithdrawal(zeroAddr);
+        _processIssuerWithdrawal(erc20DAI);
+        _processIssuerWithdrawal(erc20USDC);
+        _processIssuerWithdrawal(erc20WBTC);
+        return true;
     }
 
     /**
@@ -353,7 +404,7 @@ contract SwarmPoweredFundraise is Ownable {
 
         // if we are above with previous amount, due to exchange rate fluctuations, return
         if (previousContributionsBCY >= maxAmountBCY)
-            return 0;
+            return amount;
 
         // if we cross the max, take only a portion of the contribution, via a percentage
         uint256 qualifiedAmount = amount;
@@ -392,18 +443,18 @@ contract SwarmPoweredFundraise is Ownable {
      *  in the case he received an offchain contribution, for example
      *
      *  @param contributor the address of the contributor we want to add
-     *  @param erc20 the currency of the contribution we are adding
+     *  @param currency the currency of the contribution we are adding
      *  @param amount the amount of the contribution we are adding
      *  @return true on success
      */
     function addOffchainContribution(
         address contributor, 
-        address erc20, 
+        address currency, 
         uint256 amount
     ) 
         public 
         ongoing 
-        onlyAcceptedCurrencies(erc20) 
+        onlyAcceptedCurrencies(currency) 
         returns (bool) 
     {
         require(offchainContributionsAllowed, "Offchain contribution failed: not allowed by setup!");
@@ -416,12 +467,12 @@ contract SwarmPoweredFundraise is Ownable {
         IContributorRestrictions(contributorRestrictions).isAllowed(contributor);
 
         // add the contribution to the buffer
-        bufferedContributions[contributor][erc20] += amount;
+        bufferedContributions[contributor][currency] += amount;
 
         // add the contribution to the queue
-        uint256 overMax = _addContribution(contributor, erc20, amount);
+        uint256 overMax = _addContribution(contributor, currency, amount);
         // the extra amount must never be refundable
-        bufferedContributions[contributor][erc20] -= overMax;
+        bufferedContributions[contributor][currency] -= overMax;
 
         // set up the contribution we have just added so that it can not be withdrawn
         contributionsList[contributor][contributionsList[contributor].length - 1]
@@ -522,11 +573,8 @@ contract SwarmPoweredFundraise is Ownable {
         if (bufferedContributionsBCY < minAmountBCY)
             return true;
 
-        // process all the buffers
-        _addContribution(contributor, zeroAddr, bufferedContributions[contributor][zeroAddr]);
-        _addContribution(contributor, erc20DAI, bufferedContributions[contributor][erc20DAI]);
-        _addContribution(contributor, erc20USDC, bufferedContributions[contributor][erc20USDC]);
-        _addContribution(contributor, erc20WBTC, bufferedContributions[contributor][erc20WBTC]);
+        // move all the buffered contributions to qualified contributions
+        _addBufferedContributions(contributor);
 
         return true;
     }
@@ -594,7 +642,7 @@ contract SwarmPoweredFundraise is Ownable {
      *  @param erc20 the token we want to process the buffer for 
      *  @return the amount that was refunded
      */
-    function _refundBuffered(address contributor, address erc20) internal returns (uint256) {
+    function _refundBufferedERC20(address contributor, address erc20) internal returns (uint256) {
         uint256 amount = bufferedContributions[contributor][erc20];
 
         if (amount == 0)
@@ -649,9 +697,9 @@ contract SwarmPoweredFundraise is Ownable {
         delete contributionsList[contributor];
 
         // withdraw from the buffers too
-        amountWithdrawnDAI += _refundBuffered(contributor, erc20DAI);
-        amountWithdrawnUSDC += _refundBuffered(contributor, erc20USDC);
-        amountWithdrawnWBTC += _refundBuffered(contributor, erc20WBTC);
+        amountWithdrawnDAI += _refundBufferedERC20(contributor, erc20DAI);
+        amountWithdrawnUSDC += _refundBufferedERC20(contributor, erc20USDC);
+        amountWithdrawnWBTC += _refundBufferedERC20(contributor, erc20WBTC);
 
         emit ContributorWithdrawal(contributor, erc20DAI, amountWithdrawnDAI);
         emit ContributorWithdrawal(contributor, erc20USDC, amountWithdrawnUSDC);
@@ -700,11 +748,7 @@ contract SwarmPoweredFundraise is Ownable {
             "Failed to finish fundraise: expiration time passed"
         );
 
-        uint256 totalContributionsBCY = toBCY(qualifiedSums[zeroAddr], zeroAddr) +
-                                        toBCY(qualifiedSums[erc20DAI], erc20DAI) +
-                                        toBCY(qualifiedSums[erc20USDC], erc20USDC) +
-                                        toBCY(qualifiedSums[erc20WBTC], erc20WBTC);
-
+        uint256 totalContributionsBCY = getQualifiedSumsBCY();
         require(totalContributionsBCY >= softCapBCY, "Failed to finish: SoftCap not reached");
 
         // lock the fundraise amount... it will be somewhere between the soft and hard caps
@@ -784,10 +828,7 @@ contract SwarmPoweredFundraise is Ownable {
             return true;
 
         // process all the buffers
-        _addContribution(contributor, zeroAddr, bufferedContributions[contributor][zeroAddr]);
-        _addContribution(contributor, erc20DAI, bufferedContributions[contributor][erc20DAI]);
-        _addContribution(contributor, erc20USDC, bufferedContributions[contributor][erc20USDC]);
-        _addContribution(contributor, erc20WBTC, bufferedContributions[contributor][erc20WBTC]);
+        _addBufferedContributions(contributor);
 
         emit ContributorAccepted(contributor);
         return true;
@@ -827,16 +868,20 @@ contract SwarmPoweredFundraise is Ownable {
         // make sure he is not on whitelist, if he is he can't be rejected
         require(!IContributorRestrictions(contributorRestrictions).isAllowed(contributor));
 
+        // remove all his qualified contributions back into the buffered, so he can withdraw them
+        // NOTE: except for the offchain contributions, which he must not be allowed to withdraw!
+        for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
+            uint256 currency = contributionsList[contributor][i].currency;
+            uint256 amount = contributionsList[contributor][i].amount;
+            qualifiedContributions[contributor][erc20WBTC] -= amount;
+            if (contributionsList[contributor][i].status != ContributionStatus.Refundable)
+                continue; 
+            contributionsList[contributor][i].status = ContributionStatus.Refunded;
+            bufferedContributions[contributor][currency] += amount;
+        }
+
         // remove his contributions from the queue
         delete(contributionsList[msg.sender]);
-
-        // remove all his qualified contributions back into the buffers
-        // NOTE: we could set the qualified contributions to 0, but no need because of the step above
-        // @TODO: actually, we can't do this because of .Offchain contributions...
-        bufferedContributions[contributor][zeroAddr] += qualifiedContributions[contributor][zeroAddr];
-        bufferedContributions[contributor][erc20DAI] += qualifiedContributions[contributor][erc20DAI];
-        bufferedContributions[contributor][erc20USDC] += qualifiedContributions[contributor][erc20USDC];
-        bufferedContributions[contributor][erc20WBTC] += qualifiedContributions[contributor][erc20WBTC];
 
         // adjust the global sums
         // NOTE: we'll actually leave global sums as they are, as they need to stay the same for historical
@@ -1008,12 +1053,8 @@ contract SwarmPoweredFundraise is Ownable {
 
         _finishFundraise();
 
-        // Withdraw the ETH and the Tokens
-        // @TODO one function
-        _processIssuerWithdrawal(zeroAddr);
-        _processIssuerWithdrawal(erc20DAI);
-        _processIssuerWithdrawal(erc20USDC);
-        _processIssuerWithdrawal(erc20WBTC);
+        // Withdraw (to the issuer) the ETH and the Tokens
+        _withdrawRaisedFunds();
 
         return true;
     }
@@ -1052,7 +1093,7 @@ contract SwarmPoweredFundraise is Ownable {
         // @TODO move below stakeAndMint
         _finishFundraise();
 
-        // @TODO Update the NAV
+        // @TODO Update the NAV, but this contract is not allowed to do it...
         // assetRegistry.updateNetAssetValueUSD(src20, netAssetValueUSD);
         uint256 netAssetValueUSD = toUSD(fundraiseAmountBCY);
         uint256 swmAmount = IGetRateMinter(minter).calcStake(netAssetValueUSD);
@@ -1068,7 +1109,6 @@ contract SwarmPoweredFundraise is Ownable {
            for (uint256 i = 0; i < addressList.length; i++) {
                  address swmProvider = addressList[i];
 
-                // @TODO add other currencies
                 // calculate the number of tokens to get from this provider
                 uint256 tokens = swmAmount > IIssuerStakeOfferPool(ISOP).getTokens(swmProvider) ?
                                  IIssuerStakeOfferPool(ISOP).getTokens(swmProvider) : swmAmount;
@@ -1097,11 +1137,8 @@ contract SwarmPoweredFundraise is Ownable {
         // Stake and mint
         IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
 
-        // Withdraw the ETH and the Tokens
-        _processIssuerWithdrawal(zeroAddr);
-        _processIssuerWithdrawal(erc20DAI);
-        _processIssuerWithdrawal(erc20USDC);
-        _processIssuerWithdrawal(erc20WBTC);
+        // Withdraw (to the issuer) the ETH and the Tokens
+        _withdrawRaisedFunds();
 
         return true;
     }
