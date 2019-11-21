@@ -270,7 +270,7 @@ contract SwarmPoweredFundraise is Ownable {
     // maybe have another more basic function 
     // addContributionMinMax, addContribution
     function _addContribution(address contributor, address erc20, uint256 amount) 
-                              internal onlyAcceptedCurrencies(erc20) returns (bool) {
+                              internal onlyAcceptedCurrencies(erc20) returns (uint256) {
 
         // convert the coming contribution to BCY
         uint256 amountBCY = toBCY( amount, erc20 );
@@ -289,7 +289,7 @@ contract SwarmPoweredFundraise is Ownable {
 
         // if we are above with previous amount, due to exchange rate fluctuations, return
         if (previousContributionsBCY >= maxAmountBCY)
-            return true;
+            return 0;
 
         uint256 qualifiedAmount;
         // if we cross the max, take only a portion of the contribution, via a percentage
@@ -324,6 +324,7 @@ contract SwarmPoweredFundraise is Ownable {
         historicalBalance[erc20].push(balance);
 
         emit Contribution(contributor, qualifiedAmount, sequence, erc20);
+        return qualifiedAmount - amount;
     }
 
     // Allows Token Issuer to add a contribution to the fundraise contract's accounting
@@ -344,10 +345,12 @@ contract SwarmPoweredFundraise is Ownable {
         bufferedContributions[contributor][erc20] += amount;
 
         // add the contribution to the queue
-        _addContribution(contributor, erc20, amount);
+        uint256 overMax = _addContribution(contributor, erc20, amount);
+        // the extra amount must never be refundable
+        bufferedContributions[contributor][erc20] -= overMax;
 
         // set up the contribution we have just added so that it can not be withdrawn
-        contributionsList[msg.sender][contributionsList[msg.sender].length - 1]
+        contributionsList[contributor][contributionsList[contributor].length - 1]
                          .status = ContributionStatus.Offchain;
     }
 
@@ -556,13 +559,8 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    function acceptContributor(address contributor) external onlyContributorRestrictions returns (bool) {
+    function acceptContributor(address contributor) external ongoing onlyContributorRestrictions returns (bool) {
         _acceptContributor(contributor);
-        return true;
-    }
-
-    function rejectContributor(address contributor) external onlyContributorRestrictions returns (bool) {
-        _rejectContributor(contributor);
         return true;
     }
 
@@ -587,11 +585,12 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    // @TODO reject -> remove
-    function _rejectContributor(address contributor) internal returns (bool) {
+    function removeContributor(address contributor) external ongoing onlyContributorRestrictions returns (bool) {
+        _removeContributor(contributor);
+        return true;
+    }
 
-        require(isFinished, 'Cannot remove contributor: fundraise has finished!');
-
+    function _removeContributor(address contributor) internal returns (bool) {
         // make sure he is not on whitelist, if he is he can't be rejected
         require(!IContributorRestrictions(contributorRestrictions).isAllowed(contributor));
 
@@ -600,6 +599,7 @@ contract SwarmPoweredFundraise is Ownable {
 
         // remove all his qualified contributions back into the buffers
         // NOTE: we could set the qualified contributions to 0, but no need because of the step above
+        // @TODO: actually, we can't do this because of .Offchain contributions...
         bufferedContributions[contributor][zeroAddr] += qualifiedContributions[contributor][zeroAddr];
         bufferedContributions[contributor][erc20DAI] += qualifiedContributions[contributor][erc20DAI];
         bufferedContributions[contributor][erc20USDC] += qualifiedContributions[contributor][erc20USDC];

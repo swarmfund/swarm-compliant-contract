@@ -30,12 +30,26 @@ contract ContributorRestrictions is IContributorRestrictions, ContributorWhiteli
     function whitelistAccount(address account) external onlyAuthorised {
         _whitelisted[account] = true;
         require(SwarmPoweredFundraise(_fundraising).acceptContributor(account));
+        emit AccountWhitelisted(account, msg.sender);
     }
 
     function unWhitelistAccount(address account) external onlyAuthorised {
         delete _whitelisted[account];
-        require(SwarmPoweredFundraise(_fundraising).rejectContributor(account));
+        require(SwarmPoweredFundraise(_fundraising).removeContributor(account));
+        emit AccountUnWhitelisted(account, msg.sender);
     }
 
-    // @TODO bulk whitelisting
+    function bulkWhitelistAccount(address[] calldata accounts) external onlyAuthorised {
+        for (uint256 i = 0; i < accounts.length ; i++) {
+            _whitelisted[accounts[i]] = true;
+            emit AccountWhitelisted(accounts[i], msg.sender);
+        }
+    }
+
+    function bulkUnWhitelistAccount(address[] calldata accounts) external onlyAuthorised {
+        for (uint256 i = 0; i < accounts.length ; i++) {
+            delete _whitelisted[accounts[i]];
+            emit AccountUnWhitelisted(accounts[i], msg.sender);
+        }
+    }
 }
