@@ -20,7 +20,7 @@ contract SwarmPoweredFundraise is Ownable {
     using SafeMath for uint256;
     // @TODO convert all math in the contract to SafeMath once happy with logic
 
-    event Contribution(address indexed from, uint256 amount, uint256 sequence, address baseCurrency);
+    event ContributionReceived(address indexed from, uint256 amount, uint256 sequence, address baseCurrency);
     event SRC20TokensClaimed(address indexed by, uint256 tokenAllotment);
     event ContributorWithdrawal(address contributorWallet, address currency, uint256 amount);
     event IssuerWithdrawal(address issuerWallet, address currency, uint256 amount);
@@ -55,7 +55,8 @@ contract SwarmPoweredFundraise is Ownable {
     address payable issuerWallet;
 
     bool public isFinished;
-    bool public contributionLocking = true;
+    bool public contributionsLocking = true;
+    bool public contributionsLocked = true;
     bool public offchainContributionsAllowed = false;
     bool public setupCompleted = false;
 
@@ -86,16 +87,16 @@ contract SwarmPoweredFundraise is Ownable {
     // State variables that change over time
     enum ContributionStatus { Refundable, Refunded, Accepted, Offchain }
 
-    struct contribution {
+    struct Contribution {
         address currency;
         uint256 amount;
-        uint256 sequence; // @TODO rething the name, maybe queuePosition
+        uint256 sequence; // @TODO rethink the name, maybe queuePosition
         ContributionStatus status;
     }
 
     // @TODO maybe rename to contributionsQueue?
     // per contributor, iterable list of his contributions
-    mapping(address => contribution[]) contributionsList; 
+    mapping(address => Contribution[]) contributionsList; 
 
     // @TODO think about naming: pending vs buffered
     // per contributor and currency, pending amount
@@ -120,11 +121,11 @@ contract SwarmPoweredFundraise is Ownable {
     }
     mapping(address => CurrencyStats) currencyStats;
 
-    struct bal {
+    struct Balance {
         uint256 sequence;
         uint256 balance;
     }
-    mapping(address => bal[]) historicalBalance;
+    mapping(address => Balance[]) historicalBalance;
 
     // uint256 rateETHtoBCY;
     // uint256 rateDAItoBCY;
@@ -132,26 +133,28 @@ contract SwarmPoweredFundraise is Ownable {
     // uint256 rateWBTCtoBCY;
 
     // only allow the external contract that handles restrictions to call
-    modifier onlyContributorRestrictions() {
-        require(msg.sender == contributorRestrictions);
+    modifier onlyContributorRestrictions {
+        require(msg.sender == contributorRestrictions, "Caller not Contributor Restrictions contract!");
         _;
     }
 
     // only allow the currencies we accept
     modifier onlyAcceptedCurrencies(address erc20) {
-        require(erc20 == zeroAddr ||
-                erc20 == erc20DAI ||
-                erc20 == erc20USDC ||
-                erc20 == erc20WBTC, 
-                'Unsupported currency');
+        require(
+            erc20 == zeroAddr ||
+            erc20 == erc20DAI ||
+            erc20 == erc20USDC ||
+            erc20 == erc20WBTC, 
+            "Unsupported currency"
+        );
         _;
     }
 
     // only allow if the fundraise has started and is ongoing 
-    modifier ongoing() {
+    modifier ongoing {
         require(SRC20tokenPriceBCY != 0 || SRC20tokenSupply != 0, "Token price or supply are not set");
-        require(setupCompleted, 'Fundraise setup not completed!');
-        require(isFinished == false, 'Fundraise has finished!');
+        require(setupCompleted, "Fundraise setup not completed!");
+        require(isFinished == false, "Fundraise has finished!");
         require(block.timestamp >= startDate, "Fundraise did not start yet!");
         require(block.timestamp <= endDate, "Fundraise has ended");
         _;
@@ -175,10 +178,13 @@ contract SwarmPoweredFundraise is Ownable {
         softCapBCY = _softCapBCY;
         hardCapBCY = _hardCapBCY;
 
-        require(_baseCurrency == erc20DAI ||
-                _baseCurrency == erc20USDC ||
-                _baseCurrency == erc20WBTC ||
-                _baseCurrency == zeroAddr, 'Unsupported base currency');
+        require(
+            _baseCurrency == erc20DAI ||
+            _baseCurrency == erc20USDC ||
+            _baseCurrency == erc20WBTC ||
+            _baseCurrency == zeroAddr, 
+            "Unsupported base currency"
+        );
 
         baseCurrency = _baseCurrency;
 
@@ -190,90 +196,103 @@ contract SwarmPoweredFundraise is Ownable {
 
     // This gets used if a person simply sends ETH to the contract
     function() external payable {
-
         // We want the Token Issuer to be able to send ETH to the contract even after
         // the fundraise has finished. He might need to get SWM via ISOP
-        require(isFinished == false || msg.sender == owner());
+        require(
+            isFinished == false || msg.sender == owner(), 
+            "Only owner can send ETH if fundraise has finished!"
+        );
 
-        _contribute(msg.sender, zeroAddr, msg.value, '');
+        _contribute(msg.sender, zeroAddr, msg.value, "");
     }
 
     // This could all be in the constructor, but we have to avoid stack too deep error
     function setupContract(
         uint256 _minAmountBCY,
         uint256 _maxAmountBCY
-    ) external onlyOwner returns (bool) {
+    ) external onlyOwner {
         minAmountBCY = _minAmountBCY;
         maxAmountBCY = _maxAmountBCY;
-        // @TODO make sure we can't run without setup
-        // bool isStarted = true;
+        setupCompleted = true;
     }
 
     // We can either set the token price, or the total token supply
-    function setSRC20tokenPriceBCY(uint256 _SRC20tokenPriceBCY) external returns (bool) {
+    function setSRC20tokenPriceBCY(uint256 priceBCY) external returns (bool) {
         // One has to be set or the other, never both.
         require(SRC20tokenPriceBCY == 0, "Token price already set");
         require(SRC20tokenSupply == 0, "Total token amount already set");
 
-        SRC20tokenPriceBCY = _SRC20tokenPriceBCY;
+        SRC20tokenPriceBCY = priceBCY;
         return true;
     }
 
     // We can either set the token total supply, or the token price
-    function setSRC20tokenSupply(uint256 _SRC20tokenSupply) external returns (bool) {
+    function setSRC20tokenSupply(uint256 tokenSupply) external returns (bool) {
         require(SRC20tokenPriceBCY == 0, "Token price already set");
         require(SRC20tokenSupply == 0, "Total token amount already set");
 
-        SRC20tokenSupply = _SRC20tokenSupply;
+        SRC20tokenSupply = tokenSupply;
         return true;
     }
 
     // Loop through accepted currencies and get the value (in BCY) of contributor's 
     // buffered contributions
     function getBufferedContributionsBCY (address contributor) public returns (uint256) {
-        return toBCY( bufferedContributions[contributor][zeroAddr], zeroAddr) +
-               toBCY( bufferedContributions[contributor][erc20DAI], erc20DAI) +
-               toBCY( bufferedContributions[contributor][erc20USDC], erc20USDC) +
-               toBCY( bufferedContributions[contributor][erc20WBTC], erc20WBTC);   
+        return (
+            toBCY(bufferedContributions[contributor][zeroAddr], zeroAddr) +
+            toBCY(bufferedContributions[contributor][erc20DAI], erc20DAI) +
+            toBCY(bufferedContributions[contributor][erc20USDC], erc20USDC) +
+            toBCY(bufferedContributions[contributor][erc20WBTC], erc20WBTC)
+        );   
     }
 
     // Loop through accepted currencies and get the value (in BCY) of contributor's 
     // qualified contributions
     function getQualifiedContributionsBCY(address contributor) public returns (uint256) {
-        return toBCY( qualifiedContributions[contributor][zeroAddr], zeroAddr) +
-               toBCY( qualifiedContributions[contributor][erc20DAI], erc20DAI) +
-               toBCY( qualifiedContributions[contributor][erc20USDC], erc20USDC) +
-               toBCY( qualifiedContributions[contributor][erc20WBTC], erc20WBTC);
+        return (
+            toBCY(qualifiedContributions[contributor][zeroAddr], zeroAddr) +
+            toBCY(qualifiedContributions[contributor][erc20DAI], erc20DAI) +
+            toBCY(qualifiedContributions[contributor][erc20USDC], erc20USDC) +
+            toBCY(qualifiedContributions[contributor][erc20WBTC], erc20WBTC)
+        );
     }
 
     // Loop through the accepted currencies and return the sum of historical 
     // balances at the time of the _sequence, converted to base currency
-    function getHistoricalBalanceBCY(uint256 _sequence) public returns (uint256) {
-        return toBCY( getHistoricalBalance(_sequence, zeroAddr), zeroAddr) + 
-               toBCY( getHistoricalBalance(_sequence, erc20DAI), erc20DAI) + 
-               toBCY( getHistoricalBalance(_sequence, erc20USDC), erc20USDC) + 
-               toBCY( getHistoricalBalance(_sequence, erc20WBTC), erc20WBTC);
+    function getHistoricalBalanceBCY(uint256 seq) public returns (uint256) {
+        return (
+            toBCY(getHistoricalBalance(seq, zeroAddr), zeroAddr) + 
+            toBCY(getHistoricalBalance(seq, erc20DAI), erc20DAI) + 
+            toBCY(getHistoricalBalance(seq, erc20USDC), erc20USDC) + 
+            toBCY(getHistoricalBalance(seq, erc20WBTC), erc20WBTC)
+        );
     }
 
     // Loop through the accepted currencies and lock the exchange rates 
     // between them and BCY
     function _lockExchangeRates() internal returns (bool) {
         // @TODO check with business if this logic is acceptable
-        lockedExchangeRate[zeroAddr] = toBCY( 1, zeroAddr );
-        lockedExchangeRate[erc20DAI] = toBCY( 1, erc20DAI );
-        lockedExchangeRate[erc20USDC] = toBCY( 1, erc20USDC );
-        lockedExchangeRate[erc20WBTC] = toBCY( 1, erc20WBTC );
+        lockedExchangeRate[zeroAddr] = toBCY(1, zeroAddr);
+        lockedExchangeRate[erc20DAI] = toBCY(1, erc20DAI);
+        lockedExchangeRate[erc20USDC] = toBCY(1, erc20USDC);
+        lockedExchangeRate[erc20WBTC] = toBCY(1, erc20WBTC);
     }
 
     // @TODO for the processing of buffers we can't have min/max checking in this function
     // because we step by step accept small amounts
     // maybe have another more basic function 
     // addContributionMinMax, addContribution
-    function _addContribution(address contributor, address erc20, uint256 amount) 
-                              internal onlyAcceptedCurrencies(erc20) returns (uint256) {
-
+    function _addContribution(
+        address contributor, 
+        address erc20, 
+        uint256 amount
+    ) 
+        internal 
+        onlyAcceptedCurrencies(erc20) 
+        returns (uint256) 
+    {
         // convert the coming contribution to BCY
-        uint256 amountBCY = toBCY( amount, erc20 );
+        uint256 amountBCY = toBCY(amount, erc20);
 
         // get the value in BCY of his previous qualified contributions
         uint256 previousContributionsBCY = getQualifiedContributionsBCY(contributor);
@@ -285,20 +304,14 @@ contract SwarmPoweredFundraise is Ownable {
         //if (contributionsBCY < minAmountBCY)
         //    return;
 
-        // now do the max checking... 
-
         // if we are above with previous amount, due to exchange rate fluctuations, return
         if (previousContributionsBCY >= maxAmountBCY)
             return 0;
 
-        uint256 qualifiedAmount;
         // if we cross the max, take only a portion of the contribution, via a percentage
-        if (contributionsBCY > maxAmountBCY) {
-            qualifiedAmount = (maxAmountBCY - previousContributionsBCY) / amountBCY
-                            * amount;
-        }
-        else
-            qualifiedAmount = amount;
+        uint256 qualifiedAmount = amount;
+        if (contributionsBCY > maxAmountBCY)
+            qualifiedAmount = amount * (maxAmountBCY - previousContributionsBCY) / amountBCY;
 
         // leave the extra in the buffer, get the all the rest
         bufferedContributions[contributor][erc20] -= qualifiedAmount;
@@ -307,7 +320,7 @@ contract SwarmPoweredFundraise is Ownable {
         if (contributionsList[contributor].length == 0)
             numberOfContributors++;
 
-        contribution memory c;
+        Contribution memory c;
         sequence++;
         c.currency = erc20;
         c.amount = qualifiedAmount;
@@ -318,21 +331,28 @@ contract SwarmPoweredFundraise is Ownable {
         // adjust the global and historical sums
         qualifiedContributions[contributor][erc20] += qualifiedAmount;
         qualifiedSums[erc20] += qualifiedAmount;
-        bal memory balance;
+        Balance memory balance;
         balance.sequence = sequence;
         balance.balance = qualifiedSums[erc20];
         historicalBalance[erc20].push(balance);
 
-        emit Contribution(contributor, qualifiedAmount, sequence, erc20);
+        emit ContributionReceived(contributor, qualifiedAmount, sequence, erc20);
         return qualifiedAmount - amount;
     }
 
     // Allows Token Issuer to add a contribution to the fundraise contract's accounting
     // in the case he received an offchain contribution, for example
-    function addOffchainContribution(address contributor, address erc20, uint256 amount) 
-             public ongoing() onlyAcceptedCurrencies(erc20) returns (bool) {
-
-        require(offchainContributionsAllowed, 'Offchain contribution failed: not allowed by setup!');
+    function addOffchainContribution(
+        address contributor, 
+        address erc20, 
+        uint256 amount
+    ) 
+        public 
+        ongoing 
+        onlyAcceptedCurrencies(erc20) 
+        returns (bool) 
+    {
+        require(offchainContributionsAllowed, "Offchain contribution failed: not allowed by setup!");
 
         // whitelist the contributor
         IContributorRestrictions(contributorRestrictions).whitelistAccount(contributor);
@@ -355,36 +375,57 @@ contract SwarmPoweredFundraise is Ownable {
     }
 
     // contribute without an affiliate link
-    function contribute(address erc20, uint256 amount) 
-        public ongoing() onlyAcceptedCurrencies(erc20) returns (bool) {
+    function contribute(
+        address erc20, 
+        uint256 amount
+    ) 
+        public 
+        ongoing 
+        onlyAcceptedCurrencies(erc20) 
+        returns (bool) 
+    {
         _contribute(msg.sender, erc20, amount, "");
     }
 
     // contribute with an affiliate link
-    function contribute(address erc20, uint256 amount, string memory affiliateLink) 
-        public ongoing() onlyAcceptedCurrencies(erc20) returns (bool) {
-
-        require(IERC20(erc20).transferFrom(msg.sender, address(this), amount), 
-                'Contribution failed: ERC20 transfer failed!');
+    function contribute(
+        address erc20, 
+        uint256 amount, 
+        string memory affiliateLink
+    ) 
+        public 
+        ongoing 
+        onlyAcceptedCurrencies(erc20) 
+        returns (bool) 
+    {
+        require(
+            IERC20(erc20).transferFrom(msg.sender, address(this), amount), 
+            "Contribution failed: ERC20 transfer failed!"
+        );
 
         _contribute(msg.sender, erc20, amount, affiliateLink);
     }
 
     // Worker function for both ETH and ERC20 contributions
-    function _contribute(address contributor, address erc20, uint256 amount, string memory affiliateLink) 
-        internal returns (bool) {
-
+    function _contribute(
+        address contributor, 
+        address currency, 
+        uint256 amount, 
+        string memory affiliateLink
+    ) 
+        internal 
+        returns (bool) 
+    {
         if (bytes(affiliateLink).length > 0) {
-            //send the reward to referee's buffer
-            bufferedContributions[affiliates[affiliateLink].account][erc20] += 
-                amount * affiliates[affiliateLink].percentage;
-
-            //adjust the amount
-            amount -= amount * affiliates[affiliateLink].percentage;
+            // send the reward to referee's buffer
+            Affiliate memory affiliate = affiliates[affiliateLink];
+            bufferedContributions[affiliate.account][currency] += amount * affiliate.percentage;
+            // adjust the amount
+            amount -= amount * affiliate.percentage;
         }
 
         // add the contribution to the buffer
-        bufferedContributions[contributor][erc20] += amount;
+        bufferedContributions[contributor][currency] += amount;
 
         // Check if contributor on whitelist
         if (IContributorRestrictions(contributorRestrictions).isAllowed(contributor) == false)
@@ -392,12 +433,12 @@ contract SwarmPoweredFundraise is Ownable {
 
         // If he already has some qualified contributions, just process the new one
         if (contributionsList[contributor].length > 0) {
-            _addContribution(contributor, erc20, amount);
+            _addContribution(contributor, currency, amount);
             return true;
         }
 
-        // If he never had qualified contributions before, see if he now has passed the minAmountBCY
-        // And if so add his buffered contributions to qualified contributions
+        // If he never had qualified contributions before, see if he has now passed 
+        // the minAmountBCY and if so add his buffered contributions to qualified contributions
 
         // get the value in BCY of his buffered contributions
         uint256 bufferedContributionsBCY = getBufferedContributionsBCY(contributor);
@@ -415,33 +456,43 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     } // fn
 
+    // Allows contributor to get refunds of the amounts he contributed
+    function getRefund() external returns (bool) {
+        require(
+            isFinished == true || block.timestamp > endDate.add(expirationTime), 
+            "Withdrawal failed: fundraise has not finished"
+        );
+        require(contributionsLocked == false, "Withdrawal failed: contibutions are locked until expiry");
+
+        _refundETHContributions(msg.sender);
+        _refundERC20Contributions(msg.sender);
+    }
+
     // Allows Contributor to withdraw all his ETH, if this is permitted by the state of the Fundraise
-    function refundContributionETH() external returns (bool) {
-        // @TODO contributionLock
-        require(isFinished == true && block.timestamp < endDate.add(expirationTime), 'Withdrawal failed: fundraise has not finished');
+    function _refundETHContributions(address contributor) internal returns (bool) {
 
         uint256 amountWithdrawn;
-        for (uint256 i = 0; i < contributionsList[msg.sender].length; i++) {
-            if (contributionsList[msg.sender][i].currency != address(0))
+        for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
+            if (contributionsList[contributor][i].currency != address(0))
                 continue;
-            if (contributionsList[msg.sender][i].status != ContributionStatus.Refundable)
+            if (contributionsList[contributor][i].status != ContributionStatus.Refundable)
                 continue; 
-            msg.sender.transfer(contributionsList[msg.sender][i].amount);
-            amountWithdrawn += contributionsList[msg.sender][i].amount;
-            contributionsList[msg.sender][i].status = ContributionStatus.Refunded;
+            msg.sender.transfer(contributionsList[contributor][i].amount);
+            amountWithdrawn += contributionsList[contributor][i].amount;
+            contributionsList[contributor][i].status = ContributionStatus.Refunded;
         }
 
-        delete contributionsList[msg.sender];
+        delete contributionsList[contributor];
 
         // withdraw from the buffer too
-        uint256 bufferAmount = bufferedContributions[msg.sender][zeroAddr];
+        uint256 bufferAmount = bufferedContributions[contributor][zeroAddr];
         if (bufferAmount > 0) {
             msg.sender.transfer(bufferAmount);
             amountWithdrawn += bufferAmount;
-            bufferedContributions[msg.sender][zeroAddr] = 0;
+            bufferedContributions[contributor][zeroAddr] = 0;
         }
 
-        emit ContributorWithdrawal(msg.sender, zeroAddr, amountWithdrawn);
+        emit ContributorWithdrawal(contributor, zeroAddr, amountWithdrawn);
         return true;
     }
 
@@ -452,7 +503,10 @@ contract SwarmPoweredFundraise is Ownable {
         if (amount == 0)
             return 0;
 
-        require(IERC20(erc20).transferFrom(address(this), contributor, amount),'ERC20 transfer failed!');
+        require(
+            IERC20(erc20).transferFrom(address(this), contributor, amount), 
+            "ERC20 transfer failed!"
+        );
         bufferedContributions[contributor][erc20] = 0;
         return amount;
     }
@@ -460,52 +514,55 @@ contract SwarmPoweredFundraise is Ownable {
     // Allows contributor to withdraw all his ERC20 tokens, if this is permitted by the state of the Fundraise
     // Only allow withdrawing of the contributions that are not: Refunded, Accepted, Offchain, or
     // Are still buffered/pending
-    function refundContributionToken() external returns (bool) {
-        require(isFinished == true && block.timestamp < endDate.add(expirationTime), 
-                'Withdrawal failed: fundraise has not finished');
- 
+    function _refundERC20Contributions(address contributor) internal returns (bool) {
         uint256 amountWithdrawnDAI;
         uint256 amountWithdrawnUSDC;
         uint256 amountWithdrawnWBTC;
  
         // We must use a loop instead of just looking at qualifiedContributions because 
         // some contributions could have been offchain and those must not be withdrawable
-        for (uint256 i = 0; i < contributionsList[msg.sender].length; i++) {
-            uint256 amount = contributionsList[msg.sender][i].amount;
-            address currency = contributionsList[msg.sender][i].currency;
-            ContributionStatus status = contributionsList[msg.sender][i].status;
+        for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
+            uint256 amount = contributionsList[contributor][i].amount;
+            address currency = contributionsList[contributor][i].currency;
+            ContributionStatus status = contributionsList[contributor][i].status;
             
             if (currency == address(0) || status != ContributionStatus.Refundable)
                 continue;
 
-            require(IERC20(currency).transferFrom(address(this), msg.sender, amount),
-                    'ERC20 transfer failed!');
+            require(
+                IERC20(currency).transferFrom(address(this), contributor, amount),
+                "ERC20 transfer failed!"
+            );
 
-            contributionsList[msg.sender][i].status = ContributionStatus.Refunded;
-            qualifiedContributions[msg.sender][currency] = 0;
+            contributionsList[contributor][i].status = ContributionStatus.Refunded;
+            qualifiedContributions[contributor][currency] = 0;
 
             if (currency == erc20DAI) amountWithdrawnDAI += amount;
             if (currency == erc20USDC) amountWithdrawnUSDC += amount;
             if (currency == erc20WBTC) amountWithdrawnWBTC += amount;
         }
 
-        delete contributionsList[msg.sender];
+        delete contributionsList[contributor];
 
         // withdraw from the buffers too
-        amountWithdrawnDAI += _refundBuffered(msg.sender, erc20DAI);
-        amountWithdrawnUSDC += _refundBuffered(msg.sender, erc20USDC);
-        amountWithdrawnWBTC += _refundBuffered(msg.sender, erc20WBTC);
+        amountWithdrawnDAI += _refundBuffered(contributor, erc20DAI);
+        amountWithdrawnUSDC += _refundBuffered(contributor, erc20USDC);
+        amountWithdrawnWBTC += _refundBuffered(contributor, erc20WBTC);
 
-        emit ContributorWithdrawal(msg.sender, erc20DAI, amountWithdrawnDAI);
-        emit ContributorWithdrawal(msg.sender, erc20USDC, amountWithdrawnUSDC);
-        emit ContributorWithdrawal(msg.sender, erc20WBTC, amountWithdrawnWBTC);
+        emit ContributorWithdrawal(contributor, erc20DAI, amountWithdrawnDAI);
+        emit ContributorWithdrawal(contributor, erc20USDC, amountWithdrawnUSDC);
+        emit ContributorWithdrawal(contributor, erc20WBTC, amountWithdrawnWBTC);
 
         return true;
     }
 
-    // This will be called if/when the fundraise expires
-    function allowContributionWithdrawals() external returns (bool) {
-        delete contributionLocking;
+    // This can be called by anyone if/when the fundraise expires
+    function unlockContributions() external returns (bool) {
+        require(
+            block.timestamp > endDate.add(expirationTime), 
+            "Cannot unlock contributios: wait until expiration"
+        );
+        contributionsLocked = false;
         return true;
     }
 
@@ -515,13 +572,15 @@ contract SwarmPoweredFundraise is Ownable {
     }
 
     // Perform all the necessary actions to finish the fundraise
-    function finishFundraise() internal 
-        onlyOwner()
-        returns (bool) {
-
-        require(isFinished == false, "Failed to finish fundraise: already finished");
-
-        require(block.timestamp < endDate.add(expirationTime), "Failed to finish fundraise: expiration time passed");
+    function _finishFundraise() internal onlyOwner() returns (bool) {
+        require(
+            isFinished == false, 
+            "Failed to finish fundraise: already finished"
+        );
+        require(
+            block.timestamp < endDate.add(expirationTime), 
+            "Failed to finish fundraise: expiration time passed"
+        );
 
         uint256 totalContributionsBCY = toBCY(qualifiedSums[zeroAddr], zeroAddr) +
                                         toBCY(qualifiedSums[erc20DAI], erc20DAI) +
@@ -539,31 +598,42 @@ contract SwarmPoweredFundraise is Ownable {
 
         // find out the token price 
         // @TODO include Presale in this
-        SRC20tokenPriceBCY = SRC20tokenPriceBCY > 0 ? SRC20tokenPriceBCY : fundraiseAmountBCY / SRC20tokenSupply;
+        SRC20tokenPriceBCY = SRC20tokenPriceBCY > 0 ? 
+                             SRC20tokenPriceBCY : fundraiseAmountBCY / SRC20tokenSupply;
 
         isFinished = true;
         return true;
     }
 
+    // set the contract with contribution rules
     function setContributionRules(address rules) external returns (bool) {
         require(contributionRules != address(0), "Contribution rules already set");
-
         contributionRules = rules;
         return true;
     }
 
+    // set the contract with contributor restrictions
     function setContributorRestrictions(address restrictions) external returns (bool) {
         require(contributorRestrictions != address(0), "Contributor restrictions already set");
-
         contributorRestrictions = restrictions;
         return true;
     }
 
-    function acceptContributor(address contributor) external ongoing onlyContributorRestrictions returns (bool) {
+    // when we whitelist a contributor, we call this to process his 
+    // pending/buffered contributions
+    function acceptContributor(
+        address contributor
+    ) 
+        external 
+        ongoing 
+        onlyContributorRestrictions 
+        returns (bool) 
+    {
         _acceptContributor(contributor);
         return true;
     }
 
+    // Worker function for acceptContributor()
     function _acceptContributor(address contributor) internal returns (bool) {
         // Check whether the contributor is restricted
         require(IContributorRestrictions(contributorRestrictions).isAllowed(contributor));
@@ -585,17 +655,27 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    function removeContributor(address contributor) external ongoing onlyContributorRestrictions returns (bool) {
+    // This function can only be called by the Token Issuer (fundraise contract owner) or
+    // By the whitelisting contract
+    function removeContributor(
+        address contributor
+    ) 
+        external 
+        ongoing 
+        onlyContributorRestrictions 
+        returns (bool) 
+    {
         _removeContributor(contributor);
         return true;
     }
 
+    // Worker function for removeContributor()
     function _removeContributor(address contributor) internal returns (bool) {
         // make sure he is not on whitelist, if he is he can't be rejected
         require(!IContributorRestrictions(contributorRestrictions).isAllowed(contributor));
 
         // remove his contributions from the queue
-        delete( contributionsList[msg.sender] );
+        delete(contributionsList[msg.sender]);
 
         // remove all his qualified contributions back into the buffers
         // NOTE: we could set the qualified contributions to 0, but no need because of the step above
@@ -625,12 +705,19 @@ contract SwarmPoweredFundraise is Ownable {
 
     // helper function for getHistoricalBalance()
     function _getLower(uint256 val1, uint256 val2, uint256 target) internal pure returns (uint256) {
-        return val1; // valjda je ovo ok....
+        return val1; // @TODO valjda je ovo ok....
     }
 
     // return the balance in _currency at the time of the _sequence
-    function getHistoricalBalance(uint256 _sequence, address _currency) public view returns (uint256) {
-        bal[] memory arr = historicalBalance[_currency];
+    function getHistoricalBalance(
+        uint256 _sequence, 
+        address _currency
+    ) 
+        public 
+        view 
+        returns (uint256) 
+    {
+        Balance[] memory arr = historicalBalance[_currency];
         // if (_currency == zeroAddr) {
         //     arr = historicalBalanceETH;
         // } else if (_currency == erc20DAI) {
@@ -670,16 +757,12 @@ contract SwarmPoweredFundraise is Ownable {
     // @TODO make this function restartable
     // Returns 0 if all tokens have been claimed, an integer if more are left
     function claimTokens() external returns (uint256) {
-
-        require(isFinished);
+        require(isFinished, "Cannot claim tokens: fundraise has not finished!");
 
         // go through a contributor's contributions, sum up those qualified for
         // converting into tokens
-
         uint256 totalContributorAcceptedBCY = 0;
-
-        for (uint256 i=0; i<contributionsList[msg.sender].length; i++) {
-
+        for (uint256 i = 0; i<contributionsList[msg.sender].length; i++) {
             // to make sure we pay him out only once
             if (contributionsList[msg.sender][i].status != ContributionStatus.Refundable)
                 continue;
@@ -691,7 +774,6 @@ contract SwarmPoweredFundraise is Ownable {
                                             contributionsList[msg.sender][i].currency);
 
             uint256 historicalBalanceBCY = getHistoricalBalanceBCY(contributionsList[msg.sender][i].sequence);
-
             // Whether we take the whole amount...
             if(historicalBalanceBCY + contributionBCY < fundraiseAmountBCY) {
                 totalContributorAcceptedBCY += contributionBCY;
@@ -702,7 +784,6 @@ contract SwarmPoweredFundraise is Ownable {
                 bufferedContributions[msg.sender][contributionsList[msg.sender][i].currency] += refund;
                 break; // we've hit the end, break from the loop
             }
-
         }
 
         uint256 tokenAllotment = totalContributorAcceptedBCY / SRC20tokenPriceBCY;
@@ -713,8 +794,7 @@ contract SwarmPoweredFundraise is Ownable {
 
     // process a withdrawal by the Issuer, making sure not more than the correct
     // amount is taken
-    function processIssuerWithdrawal(address currency) internal returns (bool) {
-        
+    function _processIssuerWithdrawal(address currency) internal returns (bool) {  
         uint256 amount = qualifiedSums[currency];
         uint256 amountBCY = toBCY(qualifiedSums[currency], currency);
         if (totalIssuerWithdrawalsBCY + amountBCY > fundraiseAmountBCY) {
@@ -742,23 +822,18 @@ contract SwarmPoweredFundraise is Ownable {
     // @TODO think more about this flow...
     function stakeAndMint() public returns (bool) {
 
-
-        uint256 numSRC20Tokens = SRC20tokenSupply > 0 ? SRC20tokenSupply : fundraiseAmountBCY / SRC20tokenPriceBCY;
-        // Stake and mint
-        //@TODO IMinter
+        uint256 numSRC20Tokens = SRC20tokenSupply > 0 ? 
+                                 SRC20tokenSupply : fundraiseAmountBCY / SRC20tokenPriceBCY;
         IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
 
-        finishFundraise();
-        require(isFinished);
+        _finishFundraise();
 
         // Withdraw the ETH and the Tokens
         // @TODO one function
-        processIssuerWithdrawal(zeroAddr);
-        processIssuerWithdrawal(erc20DAI);
-        processIssuerWithdrawal(erc20USDC);
-        processIssuerWithdrawal(erc20WBTC);
-
-
+        _processIssuerWithdrawal(zeroAddr);
+        _processIssuerWithdrawal(erc20DAI);
+        _processIssuerWithdrawal(erc20USDC);
+        _processIssuerWithdrawal(erc20WBTC);
 
         return true;
     }
@@ -772,23 +847,26 @@ contract SwarmPoweredFundraise is Ownable {
     }
 
     // call this function when you want to use ISOP with specific providers
-    function stakeAndMint(address ISOP, address[] memory addressList, uint256 maxMarkup) public returns (bool) {
+    function stakeAndMint(
+        address ISOP, 
+        address[] memory addressList, 
+        uint256 maxMarkup
+    ) 
+        public 
+        returns (bool) 
+    {
         // This has all the conditions and will blow up if they are not met
         // @TODO move below stakeAndMint
-        finishFundraise();
-        require(isFinished);
+        _finishFundraise();
 
         // @TODO Update the NAV
         // assetRegistry.updateNetAssetValueUSD(src20, netAssetValueUSD);
         uint256 netAssetValueUSD = toUSD(fundraiseAmountBCY);
         uint256 swmAmount = IGetRateMinter(minter).calcStake(netAssetValueUSD);
 
-        // If we passed an empty array, that is, if we want to use the providers in the 
-        // order they registered to ISOP
-
         uint256 spentETH;
         uint256 priceETH;
-        if (addressList.length == 0) {
+        if (addressList.length == 0) { // we want ISOP to determine providers
             priceETH = IIssuerStakeOfferPool(ISOP).loopGetSWMPriceETH(swmAmount, maxMarkup);
             IIssuerStakeOfferPool(ISOP).loopBuySWMTokens.value(priceETH)(swmAmount, maxMarkup);
             // @TODO accept all currencies
@@ -821,22 +899,22 @@ contract SwarmPoweredFundraise is Ownable {
         // this needs to be called by ISOP, because ISOP is owner of the tokens
         IERC20(SwarmERC20).approve(minter, swmAmount);
 
-        uint256 numSRC20Tokens = SRC20tokenSupply > 0 ? SRC20tokenSupply : fundraiseAmountBCY / SRC20tokenPriceBCY;
+        uint256 numSRC20Tokens = SRC20tokenSupply > 0 ? 
+                                 SRC20tokenSupply : fundraiseAmountBCY / SRC20tokenPriceBCY;
         // Stake and mint
         IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
 
         // Withdraw the ETH and the Tokens
-        processIssuerWithdrawal(zeroAddr);
-        processIssuerWithdrawal(erc20DAI);
-        processIssuerWithdrawal(erc20USDC);
-        processIssuerWithdrawal(erc20WBTC);
+        _processIssuerWithdrawal(zeroAddr);
+        _processIssuerWithdrawal(erc20DAI);
+        _processIssuerWithdrawal(erc20USDC);
+        _processIssuerWithdrawal(erc20WBTC);
 
         return true;
     }
 
     // convert from base currency to USD
     function toUSD(uint256 amountBCY) public returns (uint256) {
-
         if (baseCurrency == erc20USDC || baseCurrency == erc20DAI)
             return amountBCY;
 
@@ -850,7 +928,6 @@ contract SwarmPoweredFundraise is Ownable {
 
     // Convert an amount in currency into an amount in base currency
     function toBCY(uint256 amount, address currency) public returns (uint256) {
-
         // return locked rates if the Fundraise finished
         if(isFinished)
             return lockedExchangeRate[currency] * amount;
