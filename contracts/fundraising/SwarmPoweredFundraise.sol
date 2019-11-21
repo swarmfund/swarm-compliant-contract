@@ -127,11 +127,6 @@ contract SwarmPoweredFundraise is Ownable {
     }
     mapping(address => Balance[]) historicalBalance;
 
-    // uint256 rateETHtoBCY;
-    // uint256 rateDAItoBCY;
-    // uint256 rateUSDCtoBCY;
-    // uint256 rateWBTCtoBCY;
-
     // only allow the external contract that handles restrictions to call
     modifier onlyContributorRestrictions {
         require(msg.sender == contributorRestrictions, "Caller not Contributor Restrictions contract!");
@@ -160,6 +155,11 @@ contract SwarmPoweredFundraise is Ownable {
         _;
     }
 
+    /**
+     *  Pass all the most important parameters that define the Fundraise
+     *  All variables cannot be in the constructor because we get "stack too deep" error
+     *  After deployment setupContract() function needs to be called to set them up.
+     */
     constructor(
         string memory _label,
         address _src20,
@@ -169,7 +169,9 @@ contract SwarmPoweredFundraise is Ownable {
         uint256 _softCapBCY,
         uint256 _hardCapBCY,
         address _baseCurrency
-    ) public {
+    ) 
+    public 
+    {
         label = _label;
         src20 = _src20;
         SRC20tokenSupply = _SRC20tokenSupply;
@@ -194,7 +196,9 @@ contract SwarmPoweredFundraise is Ownable {
         exchange[erc20WBTC] = 0x4d2f5cFbA55AE412221182D8475bC85799A5644b;
     }
 
-    // This gets used if a person simply sends ETH to the contract
+    /**
+     *  Invoked when a contributor simply sends ETH to the contract
+     */
     function() external payable {
         // We want the Token Issuer to be able to send ETH to the contract even after
         // the fundraise has finished. He might need to get SWM via ISOP
@@ -206,37 +210,56 @@ contract SwarmPoweredFundraise is Ownable {
         _contribute(msg.sender, zeroAddr, msg.value, "");
     }
 
-    // This could all be in the constructor, but we have to avoid stack too deep error
+    /**
+     *  Set up additional parameters that didn't fit in the constructor
+     *  All variables cannot be in the constructor because we get "stack too deep" error
+     */
     function setupContract(
         uint256 _minAmountBCY,
         uint256 _maxAmountBCY
-    ) external onlyOwner {
+    )
+    external
+    onlyOwner
+    {
         minAmountBCY = _minAmountBCY;
         maxAmountBCY = _maxAmountBCY;
         setupCompleted = true;
     }
 
-    // We can either set the token price, or the total token supply
+    /**
+     *  We can either set the token price, or the total token supply, and
+     *  we can only do it once, after which it is locked
+     *  @param priceBCY the price of individual token, in BCY
+     *  @return true on success
+     */
     function setSRC20tokenPriceBCY(uint256 priceBCY) external returns (bool) {
         // One has to be set or the other, never both.
         require(SRC20tokenPriceBCY == 0, "Token price already set");
         require(SRC20tokenSupply == 0, "Total token amount already set");
-
         SRC20tokenPriceBCY = priceBCY;
         return true;
     }
 
-    // We can either set the token total supply, or the token price
+    /**
+     *  We can either set the token supply, or the token price, and
+     *  we can only do it once, after which it is locked
+     *  @param priceBCY the price of individual token, in BCY
+     *  @return true on success
+     */
     function setSRC20tokenSupply(uint256 tokenSupply) external returns (bool) {
         require(SRC20tokenPriceBCY == 0, "Token price already set");
         require(SRC20tokenSupply == 0, "Total token amount already set");
-
         SRC20tokenSupply = tokenSupply;
         return true;
     }
 
-    // Loop through accepted currencies and get the value (in BCY) of contributor's 
-    // buffered contributions
+    /**
+     *  Loop through currencies and get the value (in BCY) of all the 
+     *  contributor's buffered contributions
+     *  @param contributor the address of the contributor
+     *  @return sum of all buffered contributions for the contributor, 
+     *          converted to BCY
+     */    
     function getBufferedContributionsBCY (address contributor) public returns (uint256) {
         return (
             toBCY(bufferedContributions[contributor][zeroAddr], zeroAddr) +
@@ -246,8 +269,13 @@ contract SwarmPoweredFundraise is Ownable {
         );   
     }
 
-    // Loop through accepted currencies and get the value (in BCY) of contributor's 
-    // qualified contributions
+    /**
+     *  Loop through currencies and get the value (in BCY) of all the 
+     *  contributor's qualified contributions
+     *  @param contributor the address of the contributor
+     *  @return sum of all qualified contributions for the contributor, 
+     *          converted to BCY
+     */    
     function getQualifiedContributionsBCY(address contributor) public returns (uint256) {
         return (
             toBCY(qualifiedContributions[contributor][zeroAddr], zeroAddr) +
@@ -257,8 +285,13 @@ contract SwarmPoweredFundraise is Ownable {
         );
     }
 
-    // Loop through the accepted currencies and return the sum of historical 
-    // balances at the time of the _sequence, converted to base currency
+    /**
+     *  Loop through the accepted currencies and return the sum of historical 
+     *  balances at the time of the seq, converted to base currency
+     *  @param seq the sequence which we want historical balances for
+     *  @return sum of all historical balances (in all currencies), at seq time, 
+     *          converted to BCY
+     */
     function getHistoricalBalanceBCY(uint256 seq) public returns (uint256) {
         return (
             toBCY(getHistoricalBalance(seq, zeroAddr), zeroAddr) + 
@@ -268,31 +301,45 @@ contract SwarmPoweredFundraise is Ownable {
         );
     }
 
-    // Loop through the accepted currencies and lock the exchange rates 
-    // between them and BCY
+    /**
+     *  Loop through the accepted currencies and lock the exchange rates 
+     *  between each of them and BCY
+     *  @return true on success
+     */
     function _lockExchangeRates() internal returns (bool) {
         // @TODO check with business if this logic is acceptable
         lockedExchangeRate[zeroAddr] = toBCY(1, zeroAddr);
         lockedExchangeRate[erc20DAI] = toBCY(1, erc20DAI);
         lockedExchangeRate[erc20USDC] = toBCY(1, erc20USDC);
         lockedExchangeRate[erc20WBTC] = toBCY(1, erc20WBTC);
+        return true;
     }
-
-    // @TODO for the processing of buffers we can't have min/max checking in this function
-    // because we step by step accept small amounts
-    // maybe have another more basic function 
-    // addContributionMinMax, addContribution
+    
+    /**
+     *  Worker function that adds a contribution to the list of contributions
+     *  and updates all the relevant sums and balances
+     *
+     *  NOTE: for the processing of buffers we can't have min/max checking in this function
+     *  because when processing buffers we accept small amounts step by step.
+     *  maybe add another more basic function: addContributionMinMax, addContribution
+     *
+     *  @param contributor the address of the contributor
+     *  @param currency the currency of the amount being added
+     *  @param amount the amount being added
+     *  @return 0 if the whole contribution was accepted, the overflow if it was above
+     *          maxAmount and only a part of it was accepted
+     */
     function _addContribution(
         address contributor, 
-        address erc20, 
+        address currency, 
         uint256 amount
     ) 
         internal 
-        onlyAcceptedCurrencies(erc20) 
+        onlyAcceptedCurrencies(currency) 
         returns (uint256) 
     {
         // convert the coming contribution to BCY
-        uint256 amountBCY = toBCY(amount, erc20);
+        uint256 amountBCY = toBCY(amount, currency);
 
         // get the value in BCY of his previous qualified contributions
         uint256 previousContributionsBCY = getQualifiedContributionsBCY(contributor);
@@ -314,7 +361,7 @@ contract SwarmPoweredFundraise is Ownable {
             qualifiedAmount = amount * (maxAmountBCY - previousContributionsBCY) / amountBCY;
 
         // leave the extra in the buffer, get the all the rest
-        bufferedContributions[contributor][erc20] -= qualifiedAmount;
+        bufferedContributions[contributor][currency] -= qualifiedAmount;
 
         // if this is the first time he's contributing, increase the contributor counter
         if (contributionsList[contributor].length == 0)
@@ -322,26 +369,33 @@ contract SwarmPoweredFundraise is Ownable {
 
         Contribution memory c;
         sequence++;
-        c.currency = erc20;
+        c.currency = currency;
         c.amount = qualifiedAmount;
         c.sequence = sequence;
         c.status = ContributionStatus.Refundable;
         contributionsList[contributor].push(c);
 
         // adjust the global and historical sums
-        qualifiedContributions[contributor][erc20] += qualifiedAmount;
-        qualifiedSums[erc20] += qualifiedAmount;
+        qualifiedContributions[contributor][currency] += qualifiedAmount;
+        qualifiedSums[currency] += qualifiedAmount;
         Balance memory balance;
         balance.sequence = sequence;
-        balance.balance = qualifiedSums[erc20];
-        historicalBalance[erc20].push(balance);
+        balance.balance = qualifiedSums[currency];
+        historicalBalance[currency].push(balance);
 
-        emit ContributionReceived(contributor, qualifiedAmount, sequence, erc20);
+        emit ContributionReceived(contributor, qualifiedAmount, sequence, currency);
         return qualifiedAmount - amount;
     }
 
-    // Allows Token Issuer to add a contribution to the fundraise contract's accounting
-    // in the case he received an offchain contribution, for example
+    /**
+     *  Allows Token Issuer to add a contribution to the fundraise contract's accounting
+     *  in the case he received an offchain contribution, for example
+     *
+     *  @param contributor the address of the contributor we want to add
+     *  @param erc20 the currency of the contribution we are adding
+     *  @param amount the amount of the contribution we are adding
+     *  @return true on success
+     */
     function addOffchainContribution(
         address contributor, 
         address erc20, 
@@ -374,7 +428,13 @@ contract SwarmPoweredFundraise is Ownable {
                          .status = ContributionStatus.Offchain;
     }
 
-    // contribute without an affiliate link
+    /**
+     *  contribute ERC20 without an affiliate link
+     *
+     *  @param erc20 the currency of the contribution
+     *  @param amount the amount of the contribution
+     *  @return true on success
+     */
     function contribute(
         address erc20, 
         uint256 amount
@@ -387,7 +447,14 @@ contract SwarmPoweredFundraise is Ownable {
         _contribute(msg.sender, erc20, amount, "");
     }
 
-    // contribute with an affiliate link
+    /**
+     *  contribute ERC20 with an affiliate link
+     *
+     *  @param erc20 the currency of the contribution
+     *  @param amount the amount of the contribution
+     *  @param affiliateLink (optional) affiliate link used
+     *  @return true on success
+     */
     function contribute(
         address erc20, 
         uint256 amount, 
@@ -406,7 +473,15 @@ contract SwarmPoweredFundraise is Ownable {
         _contribute(msg.sender, erc20, amount, affiliateLink);
     }
 
-    // Worker function for both ETH and ERC20 contributions
+    /**
+     *  Worker function for both ETH and ERC20 contributions
+     *
+     *  @param contributor the address of the contributor
+     *  @param currency the currency of the contribution
+     *  @param amount the amount of the contribution
+     *  @param affiliateLink (optional) affiliate link used
+     *  @return true on success
+     */
     function _contribute(
         address contributor, 
         address currency, 
@@ -454,9 +529,14 @@ contract SwarmPoweredFundraise is Ownable {
         _addContribution(contributor, erc20WBTC, bufferedContributions[contributor][erc20WBTC]);
 
         return true;
-    } // fn
+    }
 
-    // Allows contributor to get refunds of the amounts he contributed
+    /**
+     *  Allows contributor to get refunds of the amounts he contributed, if
+     *  various conditions are met
+     *
+     *  @return true on success
+     */
     function getRefund() external returns (bool) {
         require(
             isFinished == true || block.timestamp > endDate.add(expirationTime), 
@@ -468,7 +548,16 @@ contract SwarmPoweredFundraise is Ownable {
         _refundERC20Contributions(msg.sender);
     }
 
-    // Allows Contributor to withdraw all his ETH, if this is permitted by the state of the Fundraise
+    /**
+     *  Allows contributor to withdraw all his ETH contributions, if this is permitted
+     *  by the state of the Fundraise. We only allow withdrawing of the contributions
+     *  that are still buffered/pending, or are qualified but not: Refunded, Accepted
+     *  or Offchain
+     *
+     *  @param contributor address of the contributor we want to withdraw 
+     *                     the ETH for/to
+     *  @return true on success
+     */
     function _refundETHContributions(address contributor) internal returns (bool) {
 
         uint256 amountWithdrawn;
@@ -496,7 +585,15 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    // Worker function for refunding a particular contributor his buffered tokens
+    /**
+     *  Helper function for refunding a particular contributor his buffered 
+     *  ERC20 tokens. This function doesn't handle ETH, nor qualified
+     *  contributions
+     *
+     *  @param contributor the price of individual token, in BCY
+     *  @param erc20 the token we want to process the buffer for 
+     *  @return the amount that was refunded
+     */
     function _refundBuffered(address contributor, address erc20) internal returns (uint256) {
         uint256 amount = bufferedContributions[contributor][erc20];
 
@@ -511,9 +608,16 @@ contract SwarmPoweredFundraise is Ownable {
         return amount;
     }
 
-    // Allows contributor to withdraw all his ERC20 tokens, if this is permitted by the state of the Fundraise
-    // Only allow withdrawing of the contributions that are not: Refunded, Accepted, Offchain, or
-    // Are still buffered/pending
+    /**
+     *  Allows contributor to withdraw all his ERC20 tokens, if this is permitted
+     *  by the state of the Fundraise. We only allow withdrawing of the contributions
+     *  that are still buffered/pending, or are qualified but not: Refunded, Accepted
+     *  or Offchain
+     *
+     *  @param contributor address of the contributor we want to withdraw 
+     *                     the ERC20 tokens/currencies for/to
+     *  @return true on success
+     */
     function _refundERC20Contributions(address contributor) internal returns (bool) {
         uint256 amountWithdrawnDAI;
         uint256 amountWithdrawnUSDC;
@@ -556,7 +660,12 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    // This can be called by anyone if/when the fundraise expires
+    /**
+     *  Unlock the contributions so that they can be withdrawn by contributors
+     *  This can be called by anyone if/when the fundraise expires
+     *
+     *  @return true on success
+     */
     function unlockContributions() external returns (bool) {
         require(
             block.timestamp > endDate.add(expirationTime), 
@@ -566,12 +675,21 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    // Retrieve the presale amount and price
+    /**
+     *  Retrieve the presale amount and price
+     *
+     *  @return preSaleAmountBCY - the amount collected in presale
+     *  @return preSaleTokensReserved - the number of tokens reserved for presale
+     */
     function getPresale() external view returns (uint256, uint256) {
         return (preSaleAmountBCY, preSaleTokensReserved);
     }
 
-    // Perform all the necessary actions to finish the fundraise
+    /**
+     *  Perform all the necessary actions to finish the fundraise
+     *
+     *  @return true on success
+     */
     function _finishFundraise() internal onlyOwner() returns (bool) {
         require(
             isFinished == false, 
@@ -605,22 +723,37 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    // set the contract with contribution rules
+    /**
+     *  Set the contract with contribution rules
+     *
+     *  @param restrictions the contract with the rules
+     *  @return true on success
+     */
     function setContributionRules(address rules) external returns (bool) {
         require(contributionRules != address(0), "Contribution rules already set");
         contributionRules = rules;
         return true;
     }
 
-    // set the contract with contributor restrictions
+    /**
+     *  Set the contract with contributor restrictions
+     *
+     *  @param restrictions the contract with the restrictions
+     *  @return true on success
+     */
     function setContributorRestrictions(address restrictions) external returns (bool) {
         require(contributorRestrictions != address(0), "Contributor restrictions already set");
         contributorRestrictions = restrictions;
         return true;
     }
 
-    // when we whitelist a contributor, we call this to process his 
-    // pending/buffered contributions
+    /**
+     *  Once a contributor has been Whitelisted, this function gets called to
+     *  process his buffered/pending transactions
+     *
+     *  @param contributor the contributor we want to add
+     *  @return true on success
+     */
     function acceptContributor(
         address contributor
     ) 
@@ -633,7 +766,12 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    // Worker function for acceptContributor()
+    /**
+     *  Worker function for acceptContributor()
+     *
+     *  @param contributor the contributor we want to add
+     *  @return true on success
+     */
     function _acceptContributor(address contributor) internal returns (bool) {
         // Check whether the contributor is restricted
         require(IContributorRestrictions(contributorRestrictions).isAllowed(contributor));
@@ -655,8 +793,15 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    // This function can only be called by the Token Issuer (fundraise contract owner) or
-    // By the whitelisting contract
+    /**
+     *  Removes a contributor (his contributions)
+     *  This function can only be called by the Token Issuer (fundraise 
+     *  contract owner) or by the restrictions/whitelisting contract
+     *  See _removeContributor for more information
+     *
+     *  @param contributor the contributor we want to remove
+     *  @return true on success
+     */
     function removeContributor(
         address contributor
     ) 
@@ -669,7 +814,15 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    // Worker function for removeContributor()
+    /**
+     *  Worker function for removeContributor()
+     *  Removes the contributor by removing all his qualified contributions
+     *  They will be moved into his buffered contributions, from where
+     *  he will be able to withdraw them, once fundraise is finished
+     *
+     *  @param contributor the contributor we want to remove
+     *  @return true on success
+     */
     function _removeContributor(address contributor) internal returns (bool) {
         // make sure he is not on whitelist, if he is he can't be rejected
         require(!IContributorRestrictions(contributorRestrictions).isAllowed(contributor));
@@ -703,12 +856,25 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    // helper function for getHistoricalBalance()
+    /**
+     *  Helper function for getHistoricalBalance()
+     *
+     *  @param val1
+     *  @param val2
+     *  @param target
+     *  @return
+     */
     function _getLower(uint256 val1, uint256 val2, uint256 target) internal pure returns (uint256) {
         return val1; // @TODO valjda je ovo ok....
     }
 
-    // return the balance in _currency at the time of the _sequence
+    /**
+     *  Return the balance in _currency at the time of the _sequence
+     *  @dev using binary search
+     *  @param priceBCY the price of individual token, in BCY
+     *  @param priceBCY the price of individual token, in BCY
+     *  @return the historical balance in _currency at the time of the _sequence
+     */
     function getHistoricalBalance(
         uint256 _sequence, 
         address _currency
@@ -754,8 +920,13 @@ contract SwarmPoweredFundraise is Ownable {
         return arr[mid].balance;
     }
 
-    // @TODO make this function restartable
-    // Returns 0 if all tokens have been claimed, an integer if more are left
+    /**
+     *  Allow the caller, if he is eligible, to withdraw his SRC20 tokens once
+     *  they have been minted
+     *  @TODO make this function restartable and return how many tokens are left to claim
+     *
+     *  @return true on success
+     */
     function claimTokens() external returns (uint256) {
         require(isFinished, "Cannot claim tokens: fundraise has not finished!");
 
@@ -792,8 +963,13 @@ contract SwarmPoweredFundraise is Ownable {
         return 0;
     }
 
-    // process a withdrawal by the Issuer, making sure not more than the correct
-    // amount is taken
+    /**
+     *  Process a single currency withdrawal by the Issuer, making sure not more
+     *  than the correct amount is taken
+     *
+     *  @param currency the currency of the contributions we want to process
+     *  @return true on success
+     */
     function _processIssuerWithdrawal(address currency) internal returns (bool) {  
         uint256 amount = qualifiedSums[currency];
         uint256 amountBCY = toBCY(qualifiedSums[currency], currency);
@@ -815,11 +991,15 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    // Call this function when you want to StakeAndMint without IssuerStakeOfferPool
-    // Note that this function assumes that the Token Issuer has acquired SWM by
-    // some other means and put them on the account of the Fundraise contract... it 
-    // does not facilitate him using fundraise proceeds to get SWM
-    // @TODO think more about this flow...
+    /**
+     *  Stake and Mint without using ISOP (IssuerStakeOfferPool)
+     *
+     *  NOTE: this function assumes that the Token Issuer has acquired SWM by
+     *  some other means and put them on the account of the Fundraise contract... it 
+     *  does not facilitate him using fundraise proceeds to get SWM
+     *
+     *  @return true on success
+     */
     function stakeAndMint() public returns (bool) {
 
         uint256 numSRC20Tokens = SRC20tokenSupply > 0 ? 
@@ -838,7 +1018,13 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    // call this function when you want to use ISOP and let it choose providers
+    /**
+     *  Stake and Mint using ISOP, letting ISOP parse providers
+     *
+     *  @param ISOP address of an ISOP contract
+     *  @param maxMarkup maximum markup the caller is willing to accept
+     *  @return true on success
+     */
     function stakeAndMint(address ISOP, uint256 maxMarkup) external returns (bool) {
         // we just create an empty list and call the worker function with that
         address[] memory a;
@@ -846,7 +1032,14 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    // call this function when you want to use ISOP with specific providers
+    /**
+     *  Stake and Mint using ISOP to get SWM from specific providers
+     *
+     *  @param ISOP address of an ISOP contract
+     *  @param addressList an array of addresses representing SWM providers
+     *  @param maxMarkup maximum markup the caller is willing to accept
+     *  @return true on success
+     */
     function stakeAndMint(
         address ISOP, 
         address[] memory addressList, 
@@ -913,7 +1106,12 @@ contract SwarmPoweredFundraise is Ownable {
         return true;
     }
 
-    // convert from base currency to USD
+    /**
+     *  Convert from base currency to USD
+     *
+     *  @param amountBCY the amount in BCY that we want to convert
+     *  @return the amountBCY converted to USD
+     */
     function toUSD(uint256 amountBCY) public returns (uint256) {
         if (baseCurrency == erc20USDC || baseCurrency == erc20DAI)
             return amountBCY;
@@ -926,7 +1124,13 @@ contract SwarmPoweredFundraise is Ownable {
         return IUniswap(exchange[erc20USDC]).getEthToTokenInputPrice(amountETH);
     }
 
-    // Convert an amount in currency into an amount in base currency
+    /**
+     *  Convert an amount in currency into an amount in base currency
+     *  
+     *  @param amount the amount we want to convert
+     *  @param currency the currency the amount is in
+     *  @return the amount converted to base currency
+     */
     function toBCY(uint256 amount, address currency) public returns (uint256) {
         // return locked rates if the Fundraise finished
         if(isFinished)
