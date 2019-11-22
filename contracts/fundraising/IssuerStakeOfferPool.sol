@@ -9,7 +9,10 @@ import "../interfaces/IIssuerStakeOfferPool.sol";
 
 /**
  * @title The Issuer Stake Offer Pool Contract
- * This contract allows the anyone to register as provider of SWM tokens.
+ *
+ * This contract allows the anyone to register as provider/seller of SWM tokens.
+ * While registering, the SWM tokens are transferred from the provider to the 
+ * contract. The unsold SWM can be withdrawn at any point in time by unregistering.
  */
 contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
 
@@ -17,7 +20,8 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
 
     // Setup variables that don't change
 
-    address public src20Registry; // @TODO check why we need this - Answer: The idea was to do stakeAndMint here, we can discuss later
+    address public src20Registry; // @TODO check why we need this - 
+                                  // Answer: The idea was to do stakeAndMint here, we can discuss later
     uint256 public minTokens;
     uint256 public maxMarkup;
     uint256 public maxProviderCount;
@@ -196,8 +200,13 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
     }
 
     // Loop to find out how much ETH we have to spend
-    function loopGetSWMPriceETH(uint256 _swmAmount, uint256 _maxMarkup) public returns (uint256) {
-
+    function loopGetSWMPriceETH(
+        uint256 _swmAmount,
+        uint256 _maxMarkup
+    )
+        public
+        returns (uint256)
+    {
         uint256 tokens;
         uint256 priceETH;
         uint256 tokensCollected;
@@ -222,9 +231,16 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
     }
 
     // Loop through the linked list of providers, buy SWM tokens from them until we have enough
-    function loopBuySWMTokens(uint256 numSWM, uint256 _maxMarkup) public payable returns (bool) {
+    function loopBuySWMTokens(
+        uint256 numSWM, 
+        uint256 _maxMarkup
+    ) 
+        public 
+        payable 
+        returns (bool) 
+    {
         // Convert figures 
-        // @TODO calculations are all wrong, we don't have a market here, but a type of a bonding curve
+        // @TODO note that we don't have a real market here, but a type of a bonding curve
         (uint256 swmPriceUSDnumerator, uint256 swmPriceUSDdenominator) = IPriceUSD(swmPriceOracle).getPrice();
         uint256 requiredUSD = numSWM * swmPriceUSDnumerator / swmPriceUSDdenominator;
 
@@ -272,7 +288,14 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
     }
 
     // Get tokens from one specific account
-    function buySWMTokens(address account, uint256 numSWM) public payable returns (bool) {
+    function buySWMTokens(
+        address account,
+        uint256 numSWM
+    )
+        public
+        payable
+        returns (bool)
+    {
 
         require(numSWM <= providerList[account].tokens, 'Purchase failed: offerer lacks tokens!');
         require(IERC20(swarmERC20).allowance(account, msg.sender) >= numSWM, 'Purchase failed: allowance not set!');

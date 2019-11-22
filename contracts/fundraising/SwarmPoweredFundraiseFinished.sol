@@ -18,22 +18,23 @@ contract SwarmPoweredFundraiseFinished is SwarmPoweredFundraise {
     constructor(
         string memory _label,
         address _src20,
-        uint256 _tokenAmount,
+        address _currencyRegistry,
+        uint256 _SRC20tokenSupply,
         uint256 _startDate,
         uint256 _endDate,
-        uint256 _softCap,
-        uint256 _hardCap,
-        address _baseCurrency
+        uint256 _softCapBCY,
+        uint256 _hardCapBCY
     )
-    SwarmPoweredFundraise(
+    SwarmPoweredFundraise
+    (
         _label,
         _src20,
-        _tokenAmount,
+        _currencyRegistry,
+        _SRC20tokenSupply,
         _startDate,
         _endDate,
-        _softCap,
-        _hardCap,
-        _baseCurrency
+        _softCapBCY,
+        _hardCapBCY
     )
     public
     {
