@@ -2,7 +2,6 @@ pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 import "../interfaces/ISRC20.sol";
 import "../interfaces/IUniswap.sol";
@@ -16,7 +15,9 @@ import "../interfaces/IContributorRestrictions.sol";
  * @title The Fundraise Contract
  * This contract allows the deployer to perform a Swarm-Powered Fundraise.
  */
-contract SwarmPoweredFundraise is Ownable {
+contract SwarmPoweredFundraise {
+
+    address private owner;
 
     using SafeMath for uint256;
     // @TODO convert all math in the contract to SafeMath once happy with logic
@@ -111,6 +112,14 @@ contract SwarmPoweredFundraise is Ownable {
     }
     mapping(address => Balance[]) historicalBalance;
 
+    /**
+     * Throws if called by any account other than the owner.
+     */
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Ownable: caller is not the owner");
+        _;
+    }
+
     // only allow the external contract that handles restrictions to call
     modifier onlyContributorRestrictions {
         require(msg.sender == contributorRestrictions, "Caller not Contributor Restrictions contract!");
@@ -153,6 +162,7 @@ contract SwarmPoweredFundraise is Ownable {
     )
     public
     {
+        owner = msg.sender;
         label = _label;
         src20 = _src20;
         cr = ICurrencyRegistry(_currencyRegistry);
@@ -172,7 +182,7 @@ contract SwarmPoweredFundraise is Ownable {
         // We want the Token Issuer to be able to send ETH to the contract even after
         // the fundraise has finished. He might need to get SWM via ISOP
         require(
-            isFinished == false || msg.sender == owner(),
+            isFinished == false || msg.sender == owner,
             "Only owner can send ETH if fundraise has finished!"
         );
 
@@ -188,7 +198,7 @@ contract SwarmPoweredFundraise is Ownable {
         uint256 _maxAmountBCY
     )
     external
-    onlyOwner
+    onlyOwner()
     {
         minAmountBCY = _minAmountBCY;
         maxAmountBCY = _maxAmountBCY;
@@ -205,55 +215,6 @@ contract SwarmPoweredFundraise is Ownable {
         require(contributionRules != address(0), "Contribution rules already set");
         contributionRules = rules;
         return true;
-    }
-
-    /**
-     *  Set the contract with contributor restrictions
-     *
-     *  @param restrictions the contract with the restrictions
-     *  @return true on success
-     */
-    function setContributorRestrictions(address restrictions) external returns (bool) {
-        require(contributorRestrictions != address(0), "Contributor restrictions already set");
-        contributorRestrictions = restrictions;
-        return true;
-    }
-
-    /**
-     *  We can either set the token price, or the total token supply, and
-     *  we can only do it once, after which it is locked
-     *  @param priceBCY the price of individual token, in BCY
-     *  @return true on success
-     */
-    function setSRC20tokenPriceBCY(uint256 priceBCY) external returns (bool) {
-        // One has to be set or the other, never both.
-        require(SRC20tokenPriceBCY == 0, "Token price already set");
-        require(SRC20tokenSupply == 0, "Total token amount already set");
-        SRC20tokenPriceBCY = priceBCY;
-        return true;
-    }
-
-    /**
-     *  We can either set the token supply, or the token price, and
-     *  we can only do it once, after which it is locked
-     *  @param tokenSupply total number of tokens to be sold in this fundraise, in BCY
-     *  @return true on success
-     */
-    function setSRC20tokenSupply(uint256 tokenSupply) external returns (bool) {
-        require(SRC20tokenPriceBCY == 0, "Token price already set");
-        require(SRC20tokenSupply == 0, "Total token amount already set");
-        SRC20tokenSupply = tokenSupply;
-        return true;
-    }
-
-    /**
-     *  Retrieve the presale amount and price
-     *
-     *  @return preSaleAmountBCY - the amount collected in presale
-     *  @return preSaleTokensReserved - the number of tokens reserved for presale
-     */
-    function getPresale() external view returns (uint256, uint256) {
-        return (preSaleAmountBCY, preSaleTokensReserved);
     }
 
     /**
