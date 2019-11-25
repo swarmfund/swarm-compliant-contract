@@ -11,6 +11,8 @@ import "../interfaces/IContributionRules.sol";
 import "../interfaces/IIssuerStakeOfferPool.sol";
 import "../interfaces/IContributorRestrictions.sol";
 
+import "./Utils.sol";
+
 /**
  * @title The Fundraise Contract
  * This contract allows the deployer to perform a Swarm-Powered Fundraise.
@@ -69,27 +71,27 @@ contract SwarmPoweredFundraise {
 
     uint256 public numberOfContributors;
 
-    struct Affiliate {
-        string affiliateLink;
-        uint256 percentage;
-    }
+    // struct Affiliate {
+    //     string affiliateLink;
+    //     uint256 percentage;
+    // }
     // Affiliate links
     mapping(string => address) affiliateLinks;
-    mapping(address => Affiliate) affiliates;
+    mapping(address => Utils.Affiliate) affiliates;
 
     // State variables that change over time
-    enum ContributionStatus { Refundable, Refunded, Accepted, Offchain }
+    // enum ContributionStatus { Refundable, Refunded, Accepted, Offchain }
 
-    struct Contribution {
-        address currency;
-        uint256 amount;
-        uint256 sequence; // @TODO rethink the name, maybe queuePosition
-        ContributionStatus status;
-    }
+    // struct Contribution {
+    //     address currency;
+    //     uint256 amount;
+    //     uint256 sequence; // @TODO rethink the name, maybe queuePosition
+    //     ContributionStatus status;
+    // }
 
     // @TODO maybe rename to contributionsQueue?
     // per contributor, iterable list of his contributions
-    mapping(address => Contribution[]) contributionsList;
+    mapping(address => Utils.Contribution[]) contributionsList;
 
     // @TODO think about naming: pending vs buffered
     // per contributor and currency, pending amount
@@ -106,11 +108,11 @@ contract SwarmPoweredFundraise {
     mapping(address => uint256) lockedExchangeRate;
 
     //currencies(currencies).currency[DAI].exchangeContract
-    struct Balance {
-        uint256 sequence;
-        uint256 balance;
-    }
-    mapping(address => Balance[]) historicalBalance;
+    // struct Balance {
+    //     uint256 sequence;
+    //     uint256 balance;
+    // }
+    mapping(address => Utils.Balance[]) historicalBalance;
 
     /**
      * Throws if called by any account other than the owner.
@@ -244,39 +246,39 @@ contract SwarmPoweredFundraise {
         return true;
     }
 
-    /**
-     *  Set up an Affiliate. Can be done by the Token Issuer at any time
-     *  Setting up the same affiliate again changes his parameters
-     *  The contributions are then available to be withdrawn by contributors
-     *
-     *  @return true on success
-     */
-    function setupAffiliate(
-        address affiliate, 
-        string calldata affiliateLink,
-        uint256 percentage // *100. 5 = 0.5%
-    ) 
-        external 
-        onlyOwner() 
-        returns (bool) 
-    {
-        affiliates[affiliate].affiliateLink = affiliateLink;
-        affiliates[affiliate].percentage = percentage;
-        affiliateLinks[affiliateLink] = affiliate;
-    }
+    // /**
+    //  *  Set up an Affiliate. Can be done by the Token Issuer at any time
+    //  *  Setting up the same affiliate again changes his parameters
+    //  *  The contributions are then available to be withdrawn by contributors
+    //  *
+    //  *  @return true on success
+    //  */
+    // function setupAffiliate(
+    //     address affiliate, 
+    //     string calldata affiliateLink,
+    //     uint256 percentage // *100. 5 = 0.5%
+    // ) 
+    //     external 
+    //     onlyOwner() 
+    //     returns (bool) 
+    // {
+    //     affiliates[affiliate].affiliateLink = affiliateLink;
+    //     affiliates[affiliate].percentage = percentage;
+    //     affiliateLinks[affiliateLink] = affiliate;
+    // }
 
-    /**
-     *  Remove an Affiliate. Can be done by the Token Issuer at any time
-     *  Any funds he received while active still remain assigned to him.
-     *  @param affiliate the address of the affiliate being removed
-     *
-     *  @return true on success
-     */
-    function removeAffiliate(address affiliate) public onlyOwner() returns (bool) {
-        affiliateLinks[affiliates[affiliate].affiliateLink] = address(0);
-        delete(affiliates[affiliate]);
-        return true;
-    }
+    // /**
+    //  *  Remove an Affiliate. Can be done by the Token Issuer at any time
+    //  *  Any funds he received while active still remain assigned to him.
+    //  *  @param affiliate the address of the affiliate being removed
+    //  *
+    //  *  @return true on success
+    //  */
+    // function removeAffiliate(address affiliate) public onlyOwner() returns (bool) {
+    //     affiliateLinks[affiliates[affiliate].affiliateLink] = address(0);
+    //     delete(affiliates[affiliate]);
+    //     return true;
+    // }
 
     /**
      *  Loop through currencies and get the value (in BCY) of all the
@@ -326,21 +328,21 @@ contract SwarmPoweredFundraise {
         return sum;
     }
 
-    /**
-     *  Loop through the accepted currencies and return the sum of historical
-     *  balances at the time of the seq, converted to base currency
-     *  @param seq the sequence which we want historical balances for
-     *  @return sum of all historical balances (in all currencies), at seq time,
-     *          converted to BCY
-     */
-    function getHistoricalBalanceBCY(uint256 seq) public returns (uint256) {
-        uint256 sum;
-        for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
-            address currency = acceptedCurrencies[i];            
-            sum += cr.toBCY(getHistoricalBalance(seq, currency), currency);
-        }
-        return sum;
-    }
+    // /**
+    //  *  Loop through the accepted currencies and return the sum of historical
+    //  *  balances at the time of the seq, converted to base currency
+    //  *  @param seq the sequence which we want historical balances for
+    //  *  @return sum of all historical balances (in all currencies), at seq time,
+    //  *          converted to BCY
+    //  */
+    // function getHistoricalBalanceBCY(uint256 seq) public returns (uint256) {
+    //     uint256 sum;
+    //     for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
+    //         address currency = acceptedCurrencies[i];            
+    //         sum += cr.toBCY(Utils.getHistoricalBalance(seq, currency, historicalBalance), currency);
+    //     }
+    //     return sum;
+    // }
 
     /**
      *  Loop through all the buffers (four now, but could be many more eventually)
@@ -372,7 +374,14 @@ contract SwarmPoweredFundraise {
     function _withdrawRaisedFunds() internal returns (bool) {
 
         for (uint256 i = 0; i < acceptedCurrencies.length; i++)
-            _processIssuerWithdrawal(acceptedCurrencies[i]);
+            totalIssuerWithdrawalsBCY = Utils.processIssuerWithdrawal(
+                issuerWallet,
+                acceptedCurrencies[i],
+                currencyRegistry,
+                totalIssuerWithdrawalsBCY,
+                fundraiseAmountBCY,
+                qualifiedSums
+            );
 
         return true;
     }
@@ -443,18 +452,18 @@ contract SwarmPoweredFundraise {
         if (contributionsList[contributor].length == 0)
             numberOfContributors++;
 
-        Contribution memory c;
+        Utils.Contribution memory c;
         sequence++;
         c.currency = currency;
         c.amount = qualifiedAmount;
         c.sequence = sequence;
-        c.status = ContributionStatus.Refundable;
+        c.status = Utils.ContributionStatus.Refundable;
         contributionsList[contributor].push(c);
 
         // adjust the global and historical sums
         qualifiedContributions[contributor][currency] += qualifiedAmount;
         qualifiedSums[currency] += qualifiedAmount;
-        Balance memory balance;
+        Utils.Balance memory balance;
         balance.sequence = sequence;
         balance.balance = qualifiedSums[currency];
         historicalBalance[currency].push(balance);
@@ -502,7 +511,7 @@ contract SwarmPoweredFundraise {
 
         // set up the contribution we have just added so that it can not be withdrawn
         contributionsList[contributor][contributionsList[contributor].length - 1]
-                         .status = ContributionStatus.Offchain;
+                         .status = Utils.ContributionStatus.Offchain;
     }
 
     /**
@@ -618,109 +627,120 @@ contract SwarmPoweredFundraise {
         );
         require(contributionsLocked == false, "Withdrawal failed: contibutions are locked until expiry");
 
-        _refundETHContributions(msg.sender);
-        _refundERC20Contributions(msg.sender);
+        Utils.refundETHContributions(
+            msg.sender,
+            contributionsList,
+            bufferedContributions
+        );
+        Utils.refundERC20Contributions(
+            msg.sender,
+            contributionsList,
+            qualifiedContributions,
+            bufferedContributions,
+            acceptedCurrencies
+        );
     }
 
-    /**
-     *  Sends to contributor all his ETH contributions, if this is permitted
-     *  by the state of the Fundraise. We only allow withdrawing of the contributions
-     *  that are still buffered/pending, or are qualified but not: Refunded, Accepted
-     *  or Offchain
-     *
-     *  @param contributor address of the contributor we want to withdraw
-     *                     the ETH for/to
-     *  @return true on success
-     */
-    function _refundETHContributions(address contributor) internal returns (bool) {
+    //     /**
+    //      *  Sends to contributor all his ETH contributions, if this is permitted
+    //      *  by the state of the Fundraise. We only allow withdrawing of the contributions
+    //      *  that are still buffered/pending, or are qualified but not: Refunded, Accepted
+    //      *  or Offchain
+    //      *
+    //      *  @param contributor address of the contributor we want to withdraw
+    //      *                     the ETH for/to
+    //      *  @return true on success
+    //      */
+    //     function _refundETHContributions(address contributor) internal returns (bool) {
+    // 
+    //         uint256 amountWithdrawn;
+    //         for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
+    //             // @TODO add sums and qualifiedContributions handling
+    //             if (contributionsList[contributor][i].currency != address(0))
+    //                 continue;
+    //             if (contributionsList[contributor][i].status != ContributionStatus.Refundable)
+    //                 continue;
+    //             msg.sender.transfer(contributionsList[contributor][i].amount);
+    //             amountWithdrawn += contributionsList[contributor][i].amount;
+    //             contributionsList[contributor][i].status = ContributionStatus.Refunded;
+    //         }
 
-        uint256 amountWithdrawn;
-        for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
-            // @TODO add sums and qualifiedContributions handling
-            if (contributionsList[contributor][i].currency != address(0))
-                continue;
-            if (contributionsList[contributor][i].status != ContributionStatus.Refundable)
-                continue;
-            msg.sender.transfer(contributionsList[contributor][i].amount);
-            amountWithdrawn += contributionsList[contributor][i].amount;
-            contributionsList[contributor][i].status = ContributionStatus.Refunded;
-        }
+    //         delete contributionsList[contributor];
 
-        delete contributionsList[contributor];
+    //         // withdraw from the buffer too
+    //         uint256 bufferAmount = bufferedContributions[contributor][ETH];
+    //         if (bufferAmount > 0) {
+    //             msg.sender.transfer(bufferAmount);
+    //             amountWithdrawn += bufferAmount;
+    //             bufferedContributions[contributor][ETH] = 0;
+    //         }
 
-        // withdraw from the buffer too
-        uint256 bufferAmount = bufferedContributions[contributor][ETH];
-        if (bufferAmount > 0) {
-            msg.sender.transfer(bufferAmount);
-            amountWithdrawn += bufferAmount;
-            bufferedContributions[contributor][ETH] = 0;
-        }
+    //         emit ContributorWithdrawal(contributor, ETH, amountWithdrawn);
+    //
+    //         return true;
+    //     }
 
-        emit ContributorWithdrawal(contributor, ETH, amountWithdrawn);
-        return true;
-    }
+    // /**
+    //  *  Helper function for refunding a particular contributor his buffered
+    //  *  ERC20 tokens. This function doesn't handle ETH, nor qualified
+    //  *  contributions
+    //  *
+    //  *  @param contributor the price of individual token, in BCY
+    //  *  @return the amount that was refunded
+    //  */
+    // function _refundBufferedERC20(address contributor) internal returns (uint256) {
+    //     uint256 sum;
+    //     for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
+    //         address currency = acceptedCurrencies[i];
+    //         uint256 amount = bufferedContributions[contributor][currency];
+    //         if (amount == 0)
+    //             continue;
+    //         require(
+    //             IERC20(currency).transferFrom(address(this), contributor, amount),
+    //             "ERC20 transfer failed!"
+    //         );
+    //         bufferedContributions[contributor][currency] = 0;
+    //         sum += amount;
+    //     }
+    //     return sum;
+    // }
 
-    /**
-     *  Helper function for refunding a particular contributor his buffered
-     *  ERC20 tokens. This function doesn't handle ETH, nor qualified
-     *  contributions
-     *
-     *  @param contributor the price of individual token, in BCY
-     *  @return the amount that was refunded
-     */
-    function _refundBufferedERC20(address contributor) internal returns (uint256) {
-        uint256 sum;
-        for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
-            address currency = acceptedCurrencies[i];
-            uint256 amount = bufferedContributions[contributor][currency];
-            if (amount == 0)
-                continue;
-            require(
-                IERC20(currency).transferFrom(address(this), contributor, amount),
-                "ERC20 transfer failed!"
-            );
-            bufferedContributions[contributor][currency] = 0;
-            sum += amount;
-        }
-        return sum;
-    }
+    // /**
+    //  *  Sends to contributor all his ERC20 tokens, if this is permitted
+    //  *  by the state of the Fundraise. We only allow withdrawing of the contributions
+    //  *  that are still buffered/pending, or are qualified but not: Refunded, Accepted
+    //  *  or Offchain
+    //  *
+    //  *  @param contributor address of the contributor we want to withdraw
+    //  *                     the ERC20 tokens/currencies for/to
+    //  *  @return true on success
+    //  */
+    // function _refundERC20Contributions(address contributor) internal returns (bool) {
+    //     // We must use a loop instead of just looking at qualifiedContributions because
+    //     // some contributions could have been offchain and those must not be withdrawable
+    //     for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
+    //         uint256 amount = contributionsList[contributor][i].amount;
+    //         address currency = contributionsList[contributor][i].currency;
+    //         Utils.ContributionStatus status = contributionsList[contributor][i].status;
 
-    /**
-     *  Sends to contributor all his ERC20 tokens, if this is permitted
-     *  by the state of the Fundraise. We only allow withdrawing of the contributions
-     *  that are still buffered/pending, or are qualified but not: Refunded, Accepted
-     *  or Offchain
-     *
-     *  @param contributor address of the contributor we want to withdraw
-     *                     the ERC20 tokens/currencies for/to
-     *  @return true on success
-     */
-    function _refundERC20Contributions(address contributor) internal returns (bool) {
-        // We must use a loop instead of just looking at qualifiedContributions because
-        // some contributions could have been offchain and those must not be withdrawable
-        for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
-            uint256 amount = contributionsList[contributor][i].amount;
-            address currency = contributionsList[contributor][i].currency;
-            ContributionStatus status = contributionsList[contributor][i].status;
+    //         if (currency == address(0) || status != Utils.ContributionStatus.Refundable)
+    //             continue;
 
-            if (currency == address(0) || status != ContributionStatus.Refundable)
-                continue;
+    //         require(
+    //             IERC20(currency).transferFrom(address(this), contributor, amount),
+    //             "ERC20 transfer failed!"
+    //         );
 
-            require(
-                IERC20(currency).transferFrom(address(this), contributor, amount),
-                "ERC20 transfer failed!"
-            );
+    //         contributionsList[contributor][i].status = Utils.ContributionStatus.Refunded;
+    //         qualifiedContributions[contributor][currency] = 0;
 
-            contributionsList[contributor][i].status = ContributionStatus.Refunded;
-            qualifiedContributions[contributor][currency] = 0;
+    //         amount += _refundBufferedERC20(contributor);
+    //         emit ContributorWithdrawal(contributor, currency, amount);
+    //     }
 
-            amount += _refundBufferedERC20(contributor);
-            emit ContributorWithdrawal(contributor, currency, amount);
-        }
-
-        delete contributionsList[contributor];
-        return true;
-    }
+    //     delete contributionsList[contributor];
+    //     return true;
+    // }
 
     /**
      *  Perform all the necessary actions to finish the fundraise
@@ -816,41 +836,17 @@ contract SwarmPoweredFundraise {
         onlyContributorRestrictions
         returns (bool)
     {
-        _removeContributor(contributor);
-        return true;
-    }
 
-    /**
-     *  Worker function for removeContributor()
-     *  Removes the contributor by removing all his qualified contributions
-     *  They will be moved into his buffered contributions, from where
-     *  he will be able to withdraw them, once fundraise is finished
-     *
-     *  @param contributor the contributor we want to remove
-     *  @return true on success
-     */
-    function _removeContributor(address contributor) internal returns (bool) {
         // make sure he is not on whitelist, if he is he can't be rejected
         require(!IContributorRestrictions(contributorRestrictions).isAllowed(contributor));
-
-        // remove all his qualified contributions back into the buffered, so he can withdraw them
-        // NOTE: except for the offchain contributions, which he must not be allowed to withdraw!
-        for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
-            address currency = contributionsList[contributor][i].currency;
-            uint256 amount = contributionsList[contributor][i].amount;
-            qualifiedContributions[contributor][currency] -= amount;
-            if (contributionsList[contributor][i].status != ContributionStatus.Refundable)
-                continue;
-            contributionsList[contributor][i].status = ContributionStatus.Refunded;
-            bufferedContributions[contributor][currency] += amount;
-        }
-
-        // remove his contributions from the queue
-        delete(contributionsList[msg.sender]);
-
-        // adjust the global sums
-        // NOTE: we'll actually leave global sums as they are, as they need to stay the same for historical
-        // balances to work
+        Utils.removeContributor(
+            contributor,
+            contributionsList,
+            bufferedContributions,
+            qualifiedContributions
+        );
+        // decrease the global counter of contributors
+        numberOfContributors--;
 
         // get the value in BCY of his qualified contributions (that we shall give back)
         uint256 qualifiedContributionsBCY = getQualifiedContributionsBCY(contributor);
@@ -859,104 +855,146 @@ contract SwarmPoweredFundraise {
         softCapBCY = softCapBCY + qualifiedContributionsBCY;
         hardCapBCY = hardCapBCY + qualifiedContributionsBCY;
 
-        // decrease the global counter of contributors
-        numberOfContributors--;
-
-        emit ContributorRemoved(contributor);
         return true;
     }
 
-    /**
-     *  Helper function for getHistoricalBalance()
-     *
-     *  @param val1 ?
-     *  @param val2 ?
-     *  @param target ?
-     *  @return ?
-     */
-    function _getLower(uint256 val1, uint256 val2, uint256 target) internal pure returns (uint256) {
-        return val1; // @TODO valjda je ovo ok....
-    }
+    // /**
+    //  *  Worker function for removeContributor()
+    //  *  Removes the contributor by removing all his qualified contributions
+    //  *  They will be moved into his buffered contributions, from where
+    //  *  he will be able to withdraw them, once fundraise is finished
+    //  *
+    //  *  @param contributor the contributor we want to remove
+    //  *  @return true on success
+    //  */
+    // function _removeContributor(address contributor) internal returns (bool) {
 
-    /**
-     *  Return the balance in _currency at the time of the _sequence
-     *  @dev using binary search
-     *  @param _sequence the queue position we are looking for
-     *  @param _currency the currency we are looking for
-     *  @return the historical balance in _currency at the time of the _sequence
-     */
-    function getHistoricalBalance(
-        uint256 _sequence,
-        address _currency
-    )
-        public
-        view
-        returns (uint256)
-    {
-        Balance[] memory arr = historicalBalance[_currency];
-        // if (_currency == zeroAddr) {
-        //     arr = historicalBalanceETH;
-        // } else if (_currency == erc20DAI) {
-        //     arr = historicalBalanceDAI;
-        // } else if (_currency == erc20USDC) {
-        //     arr = historicalBalanceUSDC;
-        // } else if (_currency == erc20WBTC) {
-        //     arr = historicalBalanceWBTC;
-        // }
-        uint256 l;
-        uint256 r = arr.length;
-        uint256 mid;
-        while (l < r) {
-            mid = l + (r - l) / 2;
-            // Check if x is present at mid
-            if (arr[mid].sequence == _sequence)
-                return arr[mid].balance;
-            if (_sequence < arr[mid].sequence) {
-                // If target is greater than previous
-                // to mid, return closest of two
-                if (mid > 0 && _sequence > arr[mid - 1].sequence) {
-                    return _getLower(arr[mid - 1].sequence, arr[mid].sequence, _sequence);
-                }
-                /* Repeat for left half */
-                r = mid;
-            } else { // If target is greater than mid
-                if (mid < arr.length - 1 && _sequence < arr[mid + 1].sequence) {
-                    return _getLower(arr[mid].sequence, arr[mid + 1].sequence, _sequence);
-                }
-                // update i
-                l = mid + 1;
-            }
-        }
-        return arr[mid].balance;
-    }
+    //     // remove all his qualified contributions back into the buffered, so he can withdraw them
+    //     // NOTE: except for the offchain contributions, which he must not be allowed to withdraw!
+    //     for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
+    //         address currency = contributionsList[contributor][i].currency;
+    //         uint256 amount = contributionsList[contributor][i].amount;
+    //         qualifiedContributions[contributor][currency] -= amount;
+    //         if (contributionsList[contributor][i].status != Utils.ContributionStatus.Refundable)
+    //             continue;
+    //         contributionsList[contributor][i].status = Utils.ContributionStatus.Refunded;
+    //         bufferedContributions[contributor][currency] += amount;
+    //     }
 
-    /**
-     *  Process a single currency withdrawal by the Issuer, making sure not more
-     *  than the correct amount is taken
-     *
-     *  @param currency the currency of the contributions we want to process
-     *  @return true on success
-     */
-    function _processIssuerWithdrawal(address currency) internal returns (bool) {
-        uint256 amount = qualifiedSums[currency];
-        uint256 amountBCY = cr.toBCY(qualifiedSums[currency], currency);
-        if (totalIssuerWithdrawalsBCY + amountBCY > fundraiseAmountBCY) {
-            amount = qualifiedSums[currency] *
-                     (fundraiseAmountBCY - totalIssuerWithdrawalsBCY) / amountBCY;
-            amountBCY = cr.toBCY(amount, currency);
-        }
+    //     // remove his contributions from the queue
+    //     delete(contributionsList[msg.sender]);
+    //     emit ContributorRemoved(contributor);
 
-        qualifiedSums[currency] -= amount;
-        totalIssuerWithdrawalsBCY += amountBCY;
+    //     // adjust the global sums
+    //     // NOTE: we'll actually leave global sums as they are, as they need to stay the same for historical
+    //     // balances to work
 
-        if (currency == ETH)
-            issuerWallet.transfer(amount);
-        else
-            IERC20(currency).transfer(issuerWallet, amount);
+    //     // get the value in BCY of his qualified contributions (that we shall give back)
+    //     uint256 qualifiedContributionsBCY = Utils.getQualifiedContributionsBCY(
+    //         contributor,
+    //         currencyRegistry,
+    //         acceptedCurrencies,
+    //         qualifiedContributions
+    //     );
 
-        emit IssuerWithdrawal(issuerWallet, currency, amount);
-        return true;
-    }
+    //     // adjust the caps, which are always in BCY
+    //     softCapBCY = softCapBCY + qualifiedContributionsBCY;
+    //     hardCapBCY = hardCapBCY + qualifiedContributionsBCY;
+
+    //     return true;
+    // }
+
+    // /**
+    //  *  Helper function for getHistoricalBalance()
+    //  *
+    //  *  @param val1 ?
+    //  *  @param val2 ?
+    //  *  @param target ?
+    //  *  @return ?
+    //  */
+    // function _getLower(uint256 val1, uint256 val2, uint256 target) internal pure returns (uint256) {
+    //     return val1; // @TODO valjda je ovo ok....
+    // }
+
+    // /**
+    //  *  Return the balance in _currency at the time of the _sequence
+    //  *  @dev using binary search
+    //  *  @param _sequence the queue position we are looking for
+    //  *  @param _currency the currency we are looking for
+    //  *  @return the historical balance in _currency at the time of the _sequence
+    //  */
+    // function getHistoricalBalance(
+    //     uint256 _sequence,
+    //     address _currency
+    // )
+    //     public
+    //     view
+    //     returns (uint256)
+    // {
+    //     Balance[] memory arr = historicalBalance[_currency];
+    //     // if (_currency == zeroAddr) {
+    //     //     arr = historicalBalanceETH;
+    //     // } else if (_currency == erc20DAI) {
+    //     //     arr = historicalBalanceDAI;
+    //     // } else if (_currency == erc20USDC) {
+    //     //     arr = historicalBalanceUSDC;
+    //     // } else if (_currency == erc20WBTC) {
+    //     //     arr = historicalBalanceWBTC;
+    //     // }
+    //     uint256 l;
+    //     uint256 r = arr.length;
+    //     uint256 mid;
+    //     while (l < r) {
+    //         mid = l + (r - l) / 2;
+    //         // Check if x is present at mid
+    //         if (arr[mid].sequence == _sequence)
+    //             return arr[mid].balance;
+    //         if (_sequence < arr[mid].sequence) {
+    //             // If target is greater than previous
+    //             // to mid, return closest of two
+    //             if (mid > 0 && _sequence > arr[mid - 1].sequence) {
+    //                 return _getLower(arr[mid - 1].sequence, arr[mid].sequence, _sequence);
+    //             }
+    //             /* Repeat for left half */
+    //             r = mid;
+    //         } else { // If target is greater than mid
+    //             if (mid < arr.length - 1 && _sequence < arr[mid + 1].sequence) {
+    //                 return _getLower(arr[mid].sequence, arr[mid + 1].sequence, _sequence);
+    //             }
+    //             // update i
+    //             l = mid + 1;
+    //         }
+    //     }
+    //     return arr[mid].balance;
+    // }
+
+    // /**
+    //  *  Process a single currency withdrawal by the Issuer, making sure not more
+    //  *  than the correct amount is taken
+    //  *
+    //  *  @param currency the currency of the contributions we want to process
+    //  *  @return true on success
+    //  */
+    // function _processIssuerWithdrawal(address currency) internal returns (bool) {
+    //     uint256 amount = qualifiedSums[currency];
+    //     uint256 amountBCY = cr.toBCY(qualifiedSums[currency], currency);
+    //     if (totalIssuerWithdrawalsBCY + amountBCY > fundraiseAmountBCY) {
+    //         amount = qualifiedSums[currency] *
+    //                  (fundraiseAmountBCY - totalIssuerWithdrawalsBCY) / amountBCY;
+    //         amountBCY = cr.toBCY(amount, currency);
+    //     }
+
+    //     qualifiedSums[currency] -= amount;
+    //     totalIssuerWithdrawalsBCY += amountBCY;
+
+    //     if (currency == ETH)
+    //         issuerWallet.transfer(amount);
+    //     else
+    //         IERC20(currency).transfer(issuerWallet, amount);
+
+    //     emit IssuerWithdrawal(issuerWallet, currency, amount);
+    //     return true;
+    // }
 
     /**
      *  Stake and Mint without using ISOP (IssuerStakeOfferPool)
@@ -1032,39 +1070,52 @@ contract SwarmPoweredFundraise {
         // @TODO make this function restartable and return how many tokens are left to claim
         require(isFinished, "Cannot claim tokens: fundraise has not finished!");
 
-        // go through a contributor's contributions, sum up those qualified for
-        // converting into tokens
-        uint256 totalContributorAcceptedBCY = 0;
-        for (uint256 i = 0; i<contributionsList[msg.sender].length; i++) {
-            // to make sure we pay him out only once
-            if (contributionsList[msg.sender][i].status != ContributionStatus.Refundable)
-                continue;
+        Utils.claimTokens(
+            src20,
+            currencyRegistry,
+            SRC20tokenPriceBCY,
+            fundraiseAmountBCY,
+            acceptedCurrencies,
+            contributionsList,
+            historicalBalance,
+            bufferedContributions
+        );
 
-            // we change to accepted... but could also be deleting
-            contributionsList[msg.sender][i].status = ContributionStatus.Accepted;
-
-            uint256 contributionBCY = cr.toBCY(
-                contributionsList[msg.sender][i].amount,
-                contributionsList[msg.sender][i].currency
-            );
-
-            uint256 historicalBalanceBCY = getHistoricalBalanceBCY(contributionsList[msg.sender][i].sequence);
-            // Whether we take the whole amount...
-            if(historicalBalanceBCY + contributionBCY < fundraiseAmountBCY) {
-                totalContributorAcceptedBCY += contributionBCY;
-            }
-            else { // ...or just a part of it
-                totalContributorAcceptedBCY += fundraiseAmountBCY - historicalBalanceBCY;
-                uint256 refund = historicalBalanceBCY + contributionBCY - fundraiseAmountBCY;
-                bufferedContributions[msg.sender][contributionsList[msg.sender][i].currency] += refund;
-                break; // we've hit the end, break from the loop
-            }
-        }
-
-        uint256 tokenAllotment = totalContributorAcceptedBCY / SRC20tokenPriceBCY;
-        ISRC20(src20).transfer(msg.sender, tokenAllotment);
-        emit SRC20TokensClaimed(msg.sender, tokenAllotment);
         return 0;
+
+        // // go through a contributor's contributions, sum up those qualified for
+        // // converting into tokens
+        // uint256 totalContributorAcceptedBCY = 0;
+        // for (uint256 i = 0; i<contributionsList[msg.sender].length; i++) {
+        //     // to make sure we pay him out only once
+        //     if (contributionsList[msg.sender][i].status != Utils.ContributionStatus.Refundable)
+        //         continue;
+
+        //     // we change to accepted... but could also be deleting
+        //     contributionsList[msg.sender][i].status = Utils.ContributionStatus.Accepted;
+
+        //     uint256 contributionBCY = cr.toBCY(
+        //         contributionsList[msg.sender][i].amount,
+        //         contributionsList[msg.sender][i].currency
+        //     );
+
+        //     uint256 historicalBalanceBCY = getHistoricalBalanceBCY(contributionsList[msg.sender][i].sequence);
+        //     // Whether we take the whole amount...
+        //     if(historicalBalanceBCY + contributionBCY < fundraiseAmountBCY) {
+        //         totalContributorAcceptedBCY += contributionBCY;
+        //     }
+        //     else { // ...or just a part of it
+        //         totalContributorAcceptedBCY += fundraiseAmountBCY - historicalBalanceBCY;
+        //         uint256 refund = historicalBalanceBCY + contributionBCY - fundraiseAmountBCY;
+        //         bufferedContributions[msg.sender][contributionsList[msg.sender][i].currency] += refund;
+        //         break; // we've hit the end, break from the loop
+        //     }
+        // }
+
+        // uint256 tokenAllotment = totalContributorAcceptedBCY / SRC20tokenPriceBCY;
+        // ISRC20(src20).transfer(msg.sender, tokenAllotment);
+        // emit SRC20TokensClaimed(msg.sender, tokenAllotment);
+        // return 0;
     }
 
 }
