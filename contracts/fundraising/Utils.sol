@@ -14,11 +14,6 @@ library Utils {
 
     enum ContributionStatus { Refundable, Refunded, Accepted, Offchain }
 
-    struct Affiliate {
-        string affiliateLink;
-        uint256 percentage;
-    }
-
     struct Balance {
         uint256 sequence;
         uint256 balance;
@@ -27,10 +22,40 @@ library Utils {
     struct Contribution {
         address currency;
         uint256 amount;
-        uint256 sequence; 
+        uint256 sequence;
         ContributionStatus status;
     }
 
+    /**
+    *  Sends to contributor all his contributions, both ETH and ERC20
+    *
+    *  @param contributor address of the contributor we want to withdraw
+    *                     the ETH for/to
+    *  @return true on success
+    */
+    function getRefund(
+        address contributor,
+        address[] storage acceptedCurrencies,
+        mapping(address => Contribution[]) storage contributionsList,
+        mapping(address => mapping(address => uint256)) storage bufferedContributions,
+        mapping(address => mapping(address => uint256)) storage qualifiedContributions
+    )
+        external
+    {
+        refundETHContributions(
+            contributor,
+            contributionsList,
+            bufferedContributions
+        );
+
+        refundERC20Contributions(
+            contributor,
+            contributionsList,
+            qualifiedContributions,
+            bufferedContributions,
+            acceptedCurrencies
+        );
+    }
 
     /**
     *  Sends to contributor all his ETH contributions, if this is permitted
@@ -47,7 +72,7 @@ library Utils {
         mapping(address => Contribution[]) storage contributionsList,
         mapping(address => mapping(address => uint256)) storage bufferedContributions
     )
-        external 
+        internal
     {
         uint256 amountWithdrawn;
         for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
@@ -83,7 +108,7 @@ library Utils {
      *  @return the amount that was refunded
      */
     function _refundBufferedERC20(
-        address contributor, 
+        address contributor,
         address[] storage acceptedCurrencies,
         mapping(address => mapping(address => uint256)) storage bufferedContributions
         ) internal returns (uint256) {
@@ -119,9 +144,9 @@ library Utils {
         mapping(address => mapping(address => uint256)) storage qualifiedContributions,
         mapping(address => mapping(address => uint256)) storage bufferedContributions,
         address[] storage acceptedCurrencies
-    ) 
-        external 
-        returns (bool) 
+    )
+        internal
+        returns (bool)
     {
         // We must use a loop instead of just looking at qualifiedContributions because
         // some contributions could have been offchain and those must not be withdrawable
@@ -218,47 +243,35 @@ library Utils {
         return arr[mid].balance;
     }
 
-
     /**
-     *  Set up an Affiliate. Can be done by the Token Issuer at any time
-     *  Setting up the same affiliate again changes his parameters
-     *  The contributions are then available to be withdrawn by contributors
+     *  Loop through the accepted currencies and initiate a withdrawal for
+     *  each currency, sending the funds to the Token Issuer
      *
      *  @return true on success
      */
-    function setupAffiliate(
-        address affiliate, 
-        string calldata affiliateLink,
-        uint256 percentage, // *100. 5 = 0.5%
-        mapping(string => address) storage affiliateLinks,
-        mapping(address => Affiliate) storage affiliates
+    function withdrawRaisedFunds(
+        address payable issuerWallet,
+        address currencyRegistry,
+        address[] storage acceptedCurrencies,
+        uint256 fundraiseAmountBCY,
+        uint256 totalIssuerWithdrawalsBCY,
+        mapping(address => uint256) storage qualifiedSums
     ) 
-        external 
-        returns (bool) 
+        internal
+        returns (uint256) 
     {
-        affiliates[affiliate].affiliateLink = affiliateLink;
-        affiliates[affiliate].percentage = percentage;
-        affiliateLinks[affiliateLink] = affiliate;
-    }
+        uint256 totalBCY;
+        for (uint256 i = 0; i < acceptedCurrencies.length; i++)
+            totalBCY += processIssuerWithdrawal(
+                issuerWallet,
+                acceptedCurrencies[i],
+                currencyRegistry,
+                totalIssuerWithdrawalsBCY,
+                fundraiseAmountBCY,
+                qualifiedSums
+            );
 
-    /**
-     *  Remove an Affiliate. Can be done by the Token Issuer at any time
-     *  Any funds he received while active still remain assigned to him.
-     *  @param affiliate the address of the affiliate being removed
-     *
-     *  @return true on success
-     */
-    function removeAffiliate(
-        address affiliate,
-        mapping(string => address) storage affiliateLinks,
-        mapping(address => Affiliate) storage affiliates
-    ) 
-    public 
-    returns (bool) 
-    {
-        affiliateLinks[affiliates[affiliate].affiliateLink] = address(0);
-        delete(affiliates[affiliate]);
-        return true;
+        return totalBCY;
     }
 
     /**
@@ -276,7 +289,7 @@ library Utils {
         uint256 fundraiseAmountBCY,
         mapping(address => uint256) storage qualifiedSums
     )
-        external
+        internal
         returns (uint256)
     {
         uint256 amount = qualifiedSums[currency];
@@ -310,15 +323,15 @@ library Utils {
         address currencyRegistry,
         address[] storage acceptedCurrencies,
         mapping(address => Balance[]) storage historicalBalance
-    ) 
+    )
         public
         returns (uint256)
     {
         uint256 sum;
         for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
-            address currency = acceptedCurrencies[i];            
+            address currency = acceptedCurrencies[i];
             sum += ICurrencyRegistry(currencyRegistry).toBCY(
-                getHistoricalBalance(seq, currency, historicalBalance), 
+                getHistoricalBalance(seq, currency, historicalBalance),
                 currency
             );
         }
@@ -341,8 +354,8 @@ library Utils {
         mapping(address => Balance[]) storage historicalBalance,
         mapping(address => mapping(address => uint256)) storage bufferedContributions
     )
-        external 
-        returns (uint256) 
+        external
+        returns (uint256)
     {
         // @TODO make this function restartable and return how many tokens are left to claim
 
@@ -398,8 +411,8 @@ library Utils {
         address currencyRegistry,
         address[] storage acceptedCurrencies,
         mapping(address => mapping(address => uint256)) storage qualifiedContributions
-    ) 
-        public 
+    )
+        public
         returns (uint256)
     {
         uint256 sum;
@@ -424,7 +437,7 @@ library Utils {
         mapping(address => Contribution[]) storage contributionsList,
         mapping(address => mapping(address => uint256)) storage bufferedContributions,
         mapping(address => mapping(address => uint256)) storage qualifiedContributions
-    ) 
+    )
         external
         returns (bool)
     {
@@ -443,6 +456,27 @@ library Utils {
         // remove his contributions from the queue
         delete(contributionsList[msg.sender]);
         emit ContributorRemoved(contributor);
+    }
+
+    /**
+     *  Loop through the accepted currencies and lock the exchange rates
+     *  between each of them and BCY
+     *  @return true on success
+     */
+    function lockExchangeRates(
+        address currencyRegistry,
+        address[] storage acceptedCurrencies,
+        mapping(address => uint256) storage lockedExchangeRate
+    )
+        internal
+        returns (bool)
+    {
+        // @TODO check with business if this logic is acceptable
+        for (uint256 i = 0; i < acceptedCurrencies.length; i++)
+            lockedExchangeRate[acceptedCurrencies[i]] =
+                ICurrencyRegistry(currencyRegistry).toBCY(1, acceptedCurrencies[i]);
+
+        return true;
     }
 
 }
