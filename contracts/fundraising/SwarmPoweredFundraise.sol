@@ -70,12 +70,12 @@ contract SwarmPoweredFundraise {
     uint256 public numberOfContributors;
 
     struct Affiliate {
-        address account;
+        string affiliateLink;
         uint256 percentage;
-        uint256 minAmount;
     }
     // Affiliate links
-    mapping(string => Affiliate) affiliates;
+    mapping(string => address) affiliateLinks;
+    mapping(address => Affiliate) affiliates;
 
     // State variables that change over time
     enum ContributionStatus { Refundable, Refunded, Accepted, Offchain }
@@ -229,6 +229,52 @@ contract SwarmPoweredFundraise {
             "Cannot unlock contributios: wait until expiration"
         );
         contributionsLocked = false;
+        return true;
+    }
+
+    /**
+     *  Cancel the fundraise. Can be done by the Token Issuer at any time
+     *  The contributions are then available to be withdrawn by contributors
+     *
+     *  @return true on success
+     */
+    function cancelFundraise() external onlyOwner() returns (bool) {
+        isFinished = true;
+        contributionsLocked = false;
+        return true;
+    }
+
+    /**
+     *  Set up an Affiliate. Can be done by the Token Issuer at any time
+     *  Setting up the same affiliate again changes his parameters
+     *  The contributions are then available to be withdrawn by contributors
+     *
+     *  @return true on success
+     */
+    function setupAffiliate(
+        address affiliate, 
+        string calldata affiliateLink,
+        uint256 percentage // *100. 5 = 0.5%
+    ) 
+        external 
+        onlyOwner() 
+        returns (bool) 
+    {
+        affiliates[affiliate].affiliateLink = affiliateLink;
+        affiliates[affiliate].percentage = percentage;
+        affiliateLinks[affiliateLink] = affiliate;
+    }
+
+    /**
+     *  Remove an Affiliate. Can be done by the Token Issuer at any time
+     *  Any funds he received while active still remain assigned to him.
+     *  @param affiliate the address of the affiliate being removed
+     *
+     *  @return true on success
+     */
+    function removeAffiliate(address affiliate) public onlyOwner() returns (bool) {
+        affiliateLinks[affiliates[affiliate].affiliateLink] = address(0);
+        delete(affiliates[affiliate]);
         return true;
     }
 
@@ -524,10 +570,10 @@ contract SwarmPoweredFundraise {
     {
         if (bytes(affiliateLink).length > 0) {
             // send the reward to referee's buffer
-            Affiliate memory affiliate = affiliates[affiliateLink];
-            bufferedContributions[affiliate.account][currency] += amount * affiliate.percentage;
+            address affiliate = affiliateLinks[affiliateLink];
+            bufferedContributions[affiliate][currency] += amount * affiliates[affiliate].percentage;
             // adjust the amount
-            amount -= amount * affiliate.percentage;
+            amount -= amount * affiliates[affiliate].percentage;
         }
 
         // add the contribution to the buffer
@@ -931,21 +977,6 @@ contract SwarmPoweredFundraise {
 
         // Withdraw (to the issuer) the ETH and the Tokens
         _withdrawRaisedFunds();
-
-        return true;
-    }
-
-    /**
-     *  Stake and Mint using ISOP, letting ISOP parse providers
-     *
-     *  @param ISOP address of an ISOP contract
-     *  @param maxMarkup maximum markup the caller is willing to accept
-     *  @return true on success
-     */
-    function stakeAndMint(address ISOP, uint256 maxMarkup) external returns (bool) {
-        // we just create an empty list and call the worker function with that
-        address[] memory a;
-        stakeAndMint(ISOP, a, maxMarkup);
         return true;
     }
 
@@ -953,13 +984,11 @@ contract SwarmPoweredFundraise {
      *  Stake and Mint using ISOP to get SWM from specific providers
      *
      *  @param ISOP address of an ISOP contract
-     *  @param addressList an array of addresses representing SWM providers
      *  @param maxMarkup maximum markup the caller is willing to accept
      *  @return true on success
      */
     function stakeAndMint(
         address ISOP,
-        address[] memory addressList,
         uint256 maxMarkup
     )
         public
@@ -976,29 +1005,11 @@ contract SwarmPoweredFundraise {
 
         uint256 spentETH;
         uint256 priceETH;
-        if (addressList.length == 0) { // we want ISOP to determine providers
-            priceETH = IIssuerStakeOfferPool(ISOP).loopGetSWMPriceETH(swmAmount, maxMarkup);
-            IIssuerStakeOfferPool(ISOP).loopBuySWMTokens.value(priceETH)(swmAmount, maxMarkup);
-            // @TODO accept all currencies
-        }
-        else { // loop through the list we got
-           for (uint256 i = 0; i < addressList.length; i++) {
-                 address swmProvider = addressList[i];
-
-                // calculate the number of tokens to get from this provider
-                uint256 tokens = swmAmount > IIssuerStakeOfferPool(ISOP).getTokens(swmProvider) ?
-                                 IIssuerStakeOfferPool(ISOP).getTokens(swmProvider) : swmAmount;
-
-                // send ETH and get the tokens
-                priceETH = IIssuerStakeOfferPool(ISOP).getSWMPriceETH(swmProvider, tokens);
-                IIssuerStakeOfferPool(ISOP).buySWMTokens.value(priceETH)(swmProvider, tokens);
-
-                // reduce the number we still need to get by the amount we just got
-                swmAmount -= tokens;
-                // increase the counter of ETH we spent
-                spentETH += priceETH;
-           }
-        }
+       
+        // we want ISOP to determine providers
+        priceETH = IIssuerStakeOfferPool(ISOP).loopGetSWMPriceETH(swmAmount, maxMarkup);
+        IIssuerStakeOfferPool(ISOP).loopBuySWMTokens.value(priceETH)(swmAmount, maxMarkup);
+        // @TODO accept all currencies
 
         // decrease the global ETH balance
         qualifiedSums[ETH] -= spentETH;
@@ -1007,9 +1018,6 @@ contract SwarmPoweredFundraise {
                                  SRC20tokenSupply : fundraiseAmountBCY / SRC20tokenPriceBCY;
         // Stake and mint
         IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
-
-        // Withdraw (to the issuer) the ETH and the Tokens
-        _withdrawRaisedFunds();
 
         return true;
     }
