@@ -67,7 +67,7 @@ library Utils {
     *                     the ETH for/to
     *  @return true on success
     */
-    function refundETHContributions(
+    function refundETHContributions( // underscore for internal functions
         address contributor,
         mapping(address => Contribution[]) storage contributionsList,
         mapping(address => mapping(address => uint256)) storage bufferedContributions
@@ -249,7 +249,7 @@ library Utils {
      *
      *  @return true on success
      */
-    function withdrawRaisedFunds(
+    function withdrawRaisedFunds( // `_`
         address payable issuerWallet,
         address currencyRegistry,
         address[] storage acceptedCurrencies,
@@ -281,7 +281,7 @@ library Utils {
      *  @param currency the currency of the contributions we want to process
      *  @return true on success
      */
-    function processIssuerWithdrawal(
+    function processIssuerWithdrawal( // `_`
         address payable issuerWallet,
         address currency,
         address currencyRegistry,
@@ -456,6 +456,8 @@ library Utils {
         // remove his contributions from the queue
         delete(contributionsList[msg.sender]);
         emit ContributorRemoved(contributor);
+
+        return true;
     }
 
     /**

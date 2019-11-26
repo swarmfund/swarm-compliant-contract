@@ -31,7 +31,7 @@ contract SwarmPoweredFundraise {
     // Setup variables that never change
     string public label;
 
-    uint256 public startDate;
+    uint256 public startDate; // Some parameters can be moved to separate contract either extendie or total separation e.g. fundraisingConfiguration
     uint256 public endDate;
     uint256 public minAmountBCY;
     uint256 public maxAmountBCY;
@@ -116,7 +116,7 @@ contract SwarmPoweredFundraise {
     // only allow if the fundraise has started and is ongoing
     modifier ongoing {
         require(SRC20tokenPriceBCY != 0 || SRC20tokenSupply != 0, "Token price or supply are not set");
-        require(setupCompleted, "Fundraise setup not completed!");
+        require(setupCompleted, "Fundraise setup not completed!"); // why just don't check if affiliateManager&min&max
         require(isFinished == false, "Fundraise has finished!");
         require(block.timestamp >= startDate, "Fundraise did not start yet!");
         require(block.timestamp <= endDate, "Fundraise has ended");
@@ -313,7 +313,7 @@ contract SwarmPoweredFundraise {
 
         return true;
     }
-
+// @TODO underscore functions should go on the bottom of the file
     /**
      *  Worker function that adds a contribution to the list of contributions
      *  and updates all the relevant sums and balances
@@ -387,7 +387,7 @@ contract SwarmPoweredFundraise {
      *  @param amount the amount of the contribution we are adding
      *  @return true on success
      */
-    function addOffchainContribution(
+    function addOffchainContribution( // Their is no affiliate here. And maybe consider merging off-chain and onchain contribution functionality
         address contributor,
         address currency,
         uint256 amount
@@ -418,6 +418,8 @@ contract SwarmPoweredFundraise {
         // set up the contribution we have just added so that it can not be withdrawn
         contributionsList[contributor][contributionsList[contributor].length - 1]
                          .status = Utils.ContributionStatus.Offchain;
+
+        return true;
     }
 
     /**
@@ -437,6 +439,7 @@ contract SwarmPoweredFundraise {
         returns (bool)
     {
         _contribute(msg.sender, erc20, amount, "");
+        return true;
     }
 
     /**
@@ -463,6 +466,7 @@ contract SwarmPoweredFundraise {
         );
 
         _contribute(msg.sender, erc20, amount, affiliateLink);
+        return true;
     }
 
     /**
@@ -500,6 +504,7 @@ contract SwarmPoweredFundraise {
             return true;
 
         // If he already has some qualified contributions, just process the new one
+        // hmm is this the case??? whitelist/graylist?
         if (contributionsList[contributor].length > 0) {
             _addContribution(contributor, currency, amount);
             return true;
@@ -512,6 +517,7 @@ contract SwarmPoweredFundraise {
         uint256 bufferedContributionsBCY = getBufferedContributionsBCY(contributor);
 
         // if the contributor is still below the minimum, return
+        // what is the point of this return?
         if (bufferedContributionsBCY < minAmountBCY)
             return true;
 
@@ -541,6 +547,8 @@ contract SwarmPoweredFundraise {
             qualifiedContributions,
             bufferedContributions
         );
+
+        return true;
     }
 
     /**

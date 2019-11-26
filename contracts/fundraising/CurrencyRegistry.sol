@@ -14,9 +14,9 @@ contract CurrencyRegistry is Ownable {
 
     using SafeMath for uint256;
 
-    enum Currencies { ETH, DAI, USDC, WBTC }
+    enum Currencies {ETH, DAI, USDC, WBTC}
 
-    address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // @TODO this needs to be configurable in order to test
 
     address ETH = address(0);
 
@@ -43,10 +43,12 @@ contract CurrencyRegistry is Ownable {
         currencyIndex[address(0)] = 0;
     }
 
-    function isAccepted(address currency) public view returns (bool) { 
-        for (uint256 i = 0; i < currenciesList.length; i++)
-            if (currency == currenciesList[i].erc20address)
+    function isAccepted(address currency) public view returns (bool) {
+        for (uint256 i = 0; i < currenciesList.length; i++) {
+            if (currency == currenciesList[i].erc20address) {
                 return true;
+            }
+        }
         return false;
     }
 
@@ -56,9 +58,10 @@ contract CurrencyRegistry is Ownable {
         c.exchangeProxy = exchangeProxy;
         currenciesList.push(c);
         currencyIndex[c.erc20address] = currenciesList.length - 1;
+        return true;
     }
 
-    function setBaseCurrency (address currency) public onlyOwner() returns (bool) {
+    function setBaseCurrency(address currency) public onlyOwner() returns (bool) {
         require(isAccepted(currency), "Unsupported base currency");
         baseCurrency = currency;
         return true;
@@ -70,19 +73,20 @@ contract CurrencyRegistry is Ownable {
 
     function getAcceptedCurrencies() external view returns (address[] memory) {
         address[] memory currencies = new address[](currenciesList.length);
-        for (uint256 i=0; i<currenciesList.length; i++)
+        for (uint256 i = 0; i < currenciesList.length; i++) {
             currencies[i] = (currenciesList[i].erc20address);
+        }
         return currencies;
     }
 
     function toUSDC(
         uint256 amount,
         address currencyFrom
-        //uint256 decimals
-    ) 
-        external 
+    //uint256 decimals
+    )
+    external
         //returns (uint256 outAmount, uint256 outDecimals)
-        returns (uint256 outAmount) 
+    returns (uint256 outAmount)
     {
         (uint256 rAmount,) =
         IExchange(currenciesList[currencyIndex[currencyFrom]].exchangeProxy).getRate(
@@ -90,7 +94,7 @@ contract CurrencyRegistry is Ownable {
             USDC,
             amount,
             0
-            //decimals
+        //decimals
         );
         return rAmount;
     }
@@ -98,11 +102,11 @@ contract CurrencyRegistry is Ownable {
     function toBCY(
         uint256 amount,
         address currencyFrom
-        //, uint256 decimals
-    ) 
-        external 
+    //, uint256 decimals
+    )
+    external
         // returns (uint256 outAmount, uint256 outDecimals)
-        returns (uint256 outAmount) 
+    returns (uint256 outAmount)
     {
         (uint256 rAmount,) =
         IExchange(currenciesList[currencyIndex[currencyFrom]].exchangeProxy).getRate(
@@ -110,7 +114,7 @@ contract CurrencyRegistry is Ownable {
             baseCurrency,
             amount,
             0
-            //decimals
+        //decimals
         );
         return rAmount;
     }
@@ -120,7 +124,7 @@ contract CurrencyRegistry is Ownable {
         address currencyTo,
         uint256 amount,
         uint256 decimals
-    ) 
+    )
     external
     returns (uint256, uint256)
     {

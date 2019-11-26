@@ -38,6 +38,8 @@ contract AffiliateManager is Ownable, DelegateRole {
         affiliates[affiliate].affiliateLink = affiliateLink;
         affiliates[affiliate].percentage = percentage;
         affiliateLinks[affiliateLink] = affiliate;
+
+        return true;
     }
 
     /**
@@ -73,7 +75,7 @@ contract AffiliateManager is Ownable, DelegateRole {
         returns (address, uint256)
     {
         return (
-            affiliateLinks[affiliateLink], 
+            affiliateLinks[affiliateLink],
             affiliates[affiliateLinks[affiliateLink]].percentage
         );
     }
