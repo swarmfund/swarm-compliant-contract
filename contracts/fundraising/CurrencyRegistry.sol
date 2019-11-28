@@ -34,8 +34,12 @@ contract CurrencyRegistry is Ownable {
 
     address public baseCurrency; // address(0) == ETH
 
-    constructor() public {
-        // ETH
+    constructor(
+
+    )
+        public 
+    {
+        // Add just ETH at deployment
         CurrencyStats memory c;
         c.erc20address = address(0);
         c.exchangeProxy = address(0);

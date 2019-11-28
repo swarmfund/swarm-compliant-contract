@@ -61,7 +61,7 @@ contract SwarmPoweredFundraise {
     ICurrencyRegistry cr;
     address[] acceptedCurrencies;
 
-    bool public isFinished;
+    bool public isFinished = false;
     bool public contributionsLocking = true;
     bool public contributionsLocked = true;
     bool public offchainContributionsAllowed = false;
@@ -83,6 +83,9 @@ contract SwarmPoweredFundraise {
 
     // per currency, total qualified sums
     mapping(address => uint256) public qualifiedSums;
+
+    // per currency, total buffered sums
+    mapping(address => uint256) public bufferedSums;
 
     // per currency, its final exchange rate to BCY
     mapping(address => uint256) lockedExchangeRate;
@@ -163,7 +166,7 @@ contract SwarmPoweredFundraise {
             isFinished == false || msg.sender == owner,
             "Only owner can send ETH if fundraise has finished!"
         );
-
+return;
         _contribute(msg.sender, ETH, msg.value, "");
     }
 
@@ -174,7 +177,8 @@ contract SwarmPoweredFundraise {
     function setupContract(
         uint256 _minAmountBCY,
         uint256 _maxAmountBCY,
-        address _affiliateManager
+        address _affiliateManager,
+        address _contributorRestrictions
     )
     external
     onlyOwner()
@@ -182,6 +186,7 @@ contract SwarmPoweredFundraise {
         minAmountBCY = _minAmountBCY;
         maxAmountBCY = _maxAmountBCY;
         affiliateManager = _affiliateManager;
+        contributorRestrictions = _contributorRestrictions;
         setupCompleted = true;
     }
 
@@ -353,6 +358,7 @@ contract SwarmPoweredFundraise {
 
         // leave the extra in the buffer, get the all the rest
         bufferedContributions[contributor][currency] -= qualifiedAmount;
+        bufferedSums[currency] -= qualifiedAmount;
 
         // if this is the first time he's contributing, increase the contributor counter
         if (contributionsList[contributor].length == 0)
@@ -387,6 +393,7 @@ contract SwarmPoweredFundraise {
      *  @param amount the amount of the contribution we are adding
      *  @return true on success
      */
+     /*
     function addOffchainContribution( // Their is no affiliate here. And maybe consider merging off-chain and onchain contribution functionality
         address contributor,
         address currency,
@@ -421,7 +428,7 @@ contract SwarmPoweredFundraise {
 
         return true;
     }
-
+*/
     /**
      *  contribute ERC20 without an affiliate link
      *
@@ -498,6 +505,7 @@ contract SwarmPoweredFundraise {
 
         // add the contribution to the buffer
         bufferedContributions[contributor][currency] += amount;
+        bufferedSums[currency] += amount;
 
         // Check if contributor on whitelist
         if (IContributorRestrictions(contributorRestrictions).isAllowed(contributor) == false)
@@ -512,7 +520,6 @@ contract SwarmPoweredFundraise {
 
         // If he never had qualified contributions before, see if he has now passed
         // the minAmountBCY and if so add his buffered contributions to qualified contributions
-
         // get the value in BCY of his buffered contributions
         uint256 bufferedContributionsBCY = getBufferedContributionsBCY(contributor);
 

@@ -38,18 +38,28 @@ contract SwarmPoweredFundraiseMock is SwarmPoweredFundraise {
     }
 
     function getBalanceETH(address contributor) public view returns (uint256) {
-        return 0;
+        return qualifiedContributions[contributor][address(0)] + 
+               bufferedContributions[contributor][address(0)];
     }
 
-    function getBalanceToken(address token, uint256 amount) public view returns (uint256) {
-        return 0;
+    function getBalanceToken(address contributor, address token) public view returns (uint256) {
+        return qualifiedContributions[contributor][token] + 
+               bufferedContributions[contributor][token];
     }
 
-        function acceptContribution(address contributor, uint256 sequence) external returns (bool) {
-            return true;
-        }
+    function getBalanceETHTotal() public view returns (uint256) {
+        return qualifiedSums[address(0)] + bufferedSums[address(0)];
+    }
 
-        function rejectContribution(address contributor, uint256 sequence) external returns (bool) {
-            return true;
-        }
+    function getBalanceTokenTotal(address token) public view returns (uint256) {
+        return qualifiedSums[token] + bufferedSums[token];
+    }
+
+    function acceptContribution(address contributor, uint256 sequence) external returns (bool) {
+        return true;
+    }
+
+    function rejectContribution(address contributor, uint256 sequence) external returns (bool) {
+        return true;
+    }
 }

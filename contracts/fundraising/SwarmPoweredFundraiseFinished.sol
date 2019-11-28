@@ -38,10 +38,14 @@ contract SwarmPoweredFundraiseFinished is SwarmPoweredFundraise {
     )
     public
     {
+        isFinished = true;
     }
 
-    function() external payable {
-        revert();
+    // function() external payable {
+    //     revert();
+    // }
+    function forceFinish() public {
+        isFinished = true;
     }
 
     function getBalanceETH(address contributor) public view returns (uint256) {
