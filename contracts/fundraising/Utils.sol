@@ -187,6 +187,9 @@ library Utils {
      *  @return ?
      */
     function _getLower(uint256 val1, uint256 val2, uint256 target) internal pure returns (uint256) {
+        // eliminate warnings
+        uint256 dummy1; dummy1 = val2; // @TODO remove
+        uint256 dummy2; dummy2 = target; // @TODO remove
         return val1; // @TODO valjda je ovo ok....
     }
 

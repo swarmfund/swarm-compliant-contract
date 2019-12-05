@@ -12,8 +12,8 @@ contract SwarmPoweredFundraiseFinished is SwarmPoweredFundraise {
     using SafeMath for uint256;
     // array
 
-    bool isOngoing = false;
-    bool isFinished = true;
+    //bool isOngoing = false;
+    //bool isFinished = true;
 
     constructor(
         string memory _label,
@@ -39,6 +39,7 @@ contract SwarmPoweredFundraiseFinished is SwarmPoweredFundraise {
     public
     {
         isFinished = true;
+        setupCompleted = true;
     }
 
     // function() external payable {
@@ -48,11 +49,14 @@ contract SwarmPoweredFundraiseFinished is SwarmPoweredFundraise {
         isFinished = true;
     }
 
-    function getBalanceETH(address contributor) public view returns (uint256) {
+    function getBalanceETH(address contributor) public pure returns (uint256) {
+        address c; c = contributor;
         return 0;
     }
 
-    function getBalanceToken(address token, uint256 amount) public view returns (uint256) {
+    function getBalanceToken(address token, uint256 amount) public pure returns (uint256) {
+        address t; t = token;
+        uint256 a; a = amount;
         return 0;
     }
 

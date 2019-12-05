@@ -22,15 +22,17 @@ contract CurrencyRegistry is Ownable {
 
     struct CurrencyStats {
         address erc20address;
-        address exchangeProxy;
+        address exchangeProxy; // NOTE: this is not the exchange, but the exchange proxy
+                               // Multiple currencies can use the same proxy
         uint256 finalExchangeRate;
         uint256 totalBufferedAmount;
         uint256 totalQualifiedAmount;
     }
 
-    CurrencyStats[] currenciesList; // allowedCurrencies // currencies
+    CurrencyStats[] public currenciesList; // allowedCurrencies // currencies // acceptedCurrencies
 
-    mapping(address => uint256) currencyIndex;
+    // pointer for each currency, to the relevant record in the CurrencyStats array above
+    mapping(address => uint256) public currencyIndex;
 
     address public baseCurrency; // address(0) == ETH
 
@@ -40,11 +42,13 @@ contract CurrencyRegistry is Ownable {
         public 
     {
         // Add just ETH at deployment
-        CurrencyStats memory c;
-        c.erc20address = address(0);
-        c.exchangeProxy = address(0);
-        currenciesList.push(c);
-        currencyIndex[address(0)] = 0;
+        // EDIT: we cannot because we don't have an exchange for it!
+        // CurrencyStats memory c;
+        // c.erc20address = address(0);
+        // c.exchangeProxy = address(0);
+        // currenciesList.push(c);
+        // currencyIndex[address(0)] = 0;
+        // setBaseCurrency(address(0));
     }
 
     function isAccepted(address currency) public view returns (bool) {
@@ -112,7 +116,28 @@ contract CurrencyRegistry is Ownable {
         // returns (uint256 outAmount, uint256 outDecimals)
     returns (uint256 outAmount)
     {
-        (uint256 rAmount,) =
+        uint256 rAmount;
+        //return 0; // @DEBUG
+
+        // // For ETH, piggyback on the other currency's exchange
+        // if(currencyFrom == address(0)) {
+        //     if(baseCurrency == address(0))
+        //         return amount;
+
+        //     (rAmount,) =
+        //     IExchange(currenciesList[currencyIndex[baseCurrency]].exchangeProxy).getRate(
+        //         currencyFrom,
+        //         baseCurrency,
+        //         amount,
+        //         0
+        //     //decimals
+        //     );
+        //     return rAmount;
+        // }
+
+        //return 7; // @DEBUG
+
+        (rAmount,) =
         IExchange(currenciesList[currencyIndex[currencyFrom]].exchangeProxy).getRate(
             currencyFrom,
             baseCurrency,
@@ -120,6 +145,7 @@ contract CurrencyRegistry is Ownable {
             0
         //decimals
         );
+
         return rAmount;
     }
 

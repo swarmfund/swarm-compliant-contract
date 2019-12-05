@@ -13,11 +13,12 @@ contract UniswapProxy is Ownable {
     mapping(address => address) exchangeList;
 
     constructor() public {
+        // These are mainnet addresses
         address erc20DAI = 0x89d24A6b4CcB1B6fAA2625fE562bDD9a23260359;
-        address erc20USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-        address erc20WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
         exchangeList[erc20DAI] = 0x09cabEC1eAd1c0Ba254B09efb3EE13841712bE14;
+        address erc20USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         exchangeList[erc20USDC] = 0x97deC872013f6B5fB443861090ad931542878126;
+        address erc20WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
         exchangeList[erc20WBTC] = 0x4d2f5cFbA55AE412221182D8475bC85799A5644b;
     }
 
@@ -44,6 +45,8 @@ contract UniswapProxy is Ownable {
     external
     returns (uint256, uint256)
     {
+        //return(0,0); // @DEBUG
+        
         // If same, just return the input
         if (currencyFrom == currencyTo)
             return (amount, decimals);
@@ -58,7 +61,7 @@ contract UniswapProxy is Ownable {
 
         // ETH - ERC20
         if (currencyFrom == address(0)) {
-            result = IUniswap(exchangeList[currencyFrom]).getEthToTokenInputPrice(amount);
+            result = IUniswap(exchangeList[currencyTo]).getEthToTokenInputPrice(amount);
             return (result, 0);
         }
 

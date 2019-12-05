@@ -16,6 +16,7 @@ import "../roles/DelegateRole.sol";
 contract ContributorRestrictions is IContributorRestrictions, ContributorWhitelist, DelegateRole {
 
     address payable fundraise;
+    uint256 public maxContributors;
 
     modifier onlyAuthorised() {
         require(msg.sender == owner() ||
@@ -26,27 +27,51 @@ contract ContributorRestrictions is IContributorRestrictions, ContributorWhiteli
     }
 
     constructor (
-        address payable fundraising
+        address payable fundraiseContract,
+        uint256 maxNumContributors
     )
         public
         Ownable()
     {
-        fundraise = fundraising;
+        fundraise = fundraiseContract;
+        maxContributors = maxNumContributors;
     }
 
+    // checkRestrictions
     function isAllowed(address account) external view returns (bool) {
-        return _whitelisted[account];
+        // if(
+        //     _whitelisted[account] &&
+        //     maxContributors == 0 ?
+        //         true :
+        //         SwarmPoweredFundraise(fundraise).numberOfContributors() < maxContributors
+        //     )
+        //     return true;
+        // else
+        //     return false;
+        require(_whitelisted[account], "Account not on whitelist!");
+        require(
+            maxContributors == 0 ?
+                 true :
+                 SwarmPoweredFundraise(fundraise).numberOfContributors() < maxContributors,
+            "Max number of contributors exceeded!"
+        );
     }
 
     function whitelistAccount(address account) external onlyAuthorised {
         _whitelisted[account] = true;
-        require(SwarmPoweredFundraise(fundraise).acceptContributor(account));
+        require(
+            SwarmPoweredFundraise(fundraise).acceptContributor(account),
+            "Whitelisting failed on processing contributions!"
+        );
         emit AccountWhitelisted(account, msg.sender);
     }
 
     function unWhitelistAccount(address account) external onlyAuthorised {
         delete _whitelisted[account];
-        require(SwarmPoweredFundraise(fundraise).removeContributor(account));
+        require(
+            SwarmPoweredFundraise(fundraise).removeContributor(account),
+            "UnWhitelisting failed on processing contributions!"
+        );
         emit AccountUnWhitelisted(account, msg.sender);
     }
 

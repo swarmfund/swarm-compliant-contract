@@ -121,7 +121,7 @@ contract SwarmPoweredFundraise {
         require(SRC20tokenPriceBCY != 0 || SRC20tokenSupply != 0, "Token price or supply are not set");
         require(setupCompleted, "Fundraise setup not completed!"); // why just don't check if affiliateManager&min&max
         require(isFinished == false, "Fundraise has finished!");
-        require(block.timestamp >= startDate, "Fundraise did not start yet!");
+        require(block.timestamp >= startDate, "Fundraise has not started yet!");
         require(block.timestamp <= endDate, "Fundraise has ended");
         _;
     }
@@ -166,7 +166,6 @@ contract SwarmPoweredFundraise {
             isFinished == false || msg.sender == owner,
             "Only owner can send ETH if fundraise has finished!"
         );
-return;
         _contribute(msg.sender, ETH, msg.value, "");
     }
 
@@ -178,7 +177,8 @@ return;
         uint256 _minAmountBCY,
         uint256 _maxAmountBCY,
         address _affiliateManager,
-        address _contributorRestrictions
+        address _contributorRestrictions,
+        address _contributionRules
     )
     external
     onlyOwner()
@@ -187,19 +187,8 @@ return;
         maxAmountBCY = _maxAmountBCY;
         affiliateManager = _affiliateManager;
         contributorRestrictions = _contributorRestrictions;
+        contributionRules = _contributionRules;
         setupCompleted = true;
-    }
-
-    /**
-     *  Set the contract with contribution rules
-     *
-     *  @param rules the contract with the rules
-     *  @return true on success
-     */
-    function setContributionRules(address rules) external returns (bool) {
-        require(contributionRules != address(0), "Contribution rules already set");
-        contributionRules = rules;
-        return true;
     }
 
     /**
@@ -293,31 +282,13 @@ return;
         uint256 sum;
         for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
             address currency = acceptedCurrencies[i];
+            if(bufferedContributions[contributor][currency] == 0)
+                continue;
             sum += _addContribution(contributor, currency, bufferedContributions[contributor][currency]);
         }
         return sum;
     }
 
-    /**
-     *  Loop through the accepted currencies and initiate a withdrawal for
-     *  each currency, sending the funds to the Token Issuer
-     *
-     *  @return true on success
-     */
-    function _withdrawRaisedFunds() internal returns (bool) {
-
-        for (uint256 i = 0; i < acceptedCurrencies.length; i++)
-            totalIssuerWithdrawalsBCY = Utils.processIssuerWithdrawal(
-                issuerWallet,
-                acceptedCurrencies[i],
-                currencyRegistry,
-                totalIssuerWithdrawalsBCY,
-                fundraiseAmountBCY,
-                qualifiedSums
-            );
-
-        return true;
-    }
 // @TODO underscore functions should go on the bottom of the file
     /**
      *  Worker function that adds a contribution to the list of contributions
@@ -393,7 +364,7 @@ return;
      *  @param amount the amount of the contribution we are adding
      *  @return true on success
      */
-     /*
+/*  @TODO @DEBUG
     function addOffchainContribution( // Their is no affiliate here. And maybe consider merging off-chain and onchain contribution functionality
         address contributor,
         address currency,
@@ -445,6 +416,7 @@ return;
         onlyAcceptedCurrencies(erc20)
         returns (bool)
     {
+        require(amount > 0, "Amount has to be positive!");
         _contribute(msg.sender, erc20, amount, "");
         return true;
     }
@@ -467,6 +439,7 @@ return;
         onlyAcceptedCurrencies(erc20)
         returns (bool)
     {
+        require(amount > 0, "Amount has to be positive!");
         require(
             IERC20(erc20).transferFrom(msg.sender, address(this), amount),
             "ERC20 transfer failed!"
@@ -507,9 +480,9 @@ return;
         bufferedContributions[contributor][currency] += amount;
         bufferedSums[currency] += amount;
 
-        // Check if contributor on whitelist
-        if (IContributorRestrictions(contributorRestrictions).isAllowed(contributor) == false)
-            return true;
+        // Check whether contributor is prevented from contributing
+        // @TODO rename function to checkRestrictions
+        IContributorRestrictions(contributorRestrictions).isAllowed(contributor);
 
         // If he already has some qualified contributions, just process the new one
         // hmm is this the case??? whitelist/graylist?
@@ -530,6 +503,27 @@ return;
 
         // move all the buffered contributions to qualified contributions
         _addBufferedContributions(contributor);
+
+        return true;
+    }
+
+    /**
+     *  Loop through the accepted currencies and initiate a withdrawal for
+     *  each currency, sending the funds to the Token Issuer
+     *
+     *  @return true on success
+     */
+    function _withdrawRaisedFunds() internal returns (bool) {
+
+        for (uint256 i = 0; i < acceptedCurrencies.length; i++)
+            totalIssuerWithdrawalsBCY = Utils.processIssuerWithdrawal(
+                issuerWallet,
+                acceptedCurrencies[i],
+                currencyRegistry,
+                totalIssuerWithdrawalsBCY,
+                fundraiseAmountBCY,
+                qualifiedSums
+            );
 
         return true;
     }
@@ -604,19 +598,8 @@ return;
         onlyContributorRestrictions
         returns (bool)
     {
-        _acceptContributor(contributor);
-        return true;
-    }
-
-    /**
-     *  Worker function for acceptContributor()
-     *
-     *  @param contributor the contributor we want to add
-     *  @return true on success
-     */
-    function _acceptContributor(address contributor) internal returns (bool) {
         // Check whether the contributor is restricted
-        require(IContributorRestrictions(contributorRestrictions).isAllowed(contributor));
+        // require(IContributorRestrictions(contributorRestrictions).isAllowed(contributor)); // @TODO @DEBUG
 
         // get the value in BCY of his buffered contributions
         uint256 bufferedContributionsBCY = getBufferedContributionsBCY(contributor);

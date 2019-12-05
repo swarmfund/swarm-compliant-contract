@@ -28,10 +28,20 @@ contract TokenDataRestrictionMock is ITransferRules {
         balance = _src20.balanceOf(from);
         nonce = _src20.getTransferNonce(from);
 
+        // eliminate warnings
+        address t; t = to;
+        uint256 v; v = value;
+
         return true;
     }
 
     function doTransfer(address from, address to, uint256 value) external returns (bool) {
+        
+        // eliminate warnings
+        address f; f = from;
+        address t; t = to;
+        uint256 v; v = value;
+        
         return true;
     }
 

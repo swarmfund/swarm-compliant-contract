@@ -41,7 +41,8 @@ contract TransferRules is ITransferRules, ManualApproval, Whitelisted {
     * @param to The address to send tokens to.
     * @param value The amount of tokens to send.
     */
-    function authorize(address from, address to, uint256 value) public returns (bool) {
+    function authorize(address from, address to, uint256 value) public view returns (bool) {
+        uint256 v; v = value; // eliminate compiler warning @TODO fix permanently
         return (isWhitelisted(from) || isGreyListed(from)) &&
         (isWhitelisted(to) || isGreyListed(to));
     }

@@ -2,6 +2,7 @@ pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "./SwarmPoweredFundraise.sol";
+import "./ContributorRestrictions.sol";
 
 /**
  * @title The Fundraise Contract
@@ -37,6 +38,14 @@ contract SwarmPoweredFundraiseMock is SwarmPoweredFundraise {
     {
     }
 
+    function getQualifiedContributions(address contributor, address currency) public view returns (uint256) {
+        return qualifiedContributions[contributor][currency];
+    }
+
+    function getBufferedContributions(address contributor, address currency) public view returns (uint256) {
+        return bufferedContributions[contributor][currency];
+    }
+
     function getBalanceETH(address contributor) public view returns (uint256) {
         return qualifiedContributions[contributor][address(0)] + 
                bufferedContributions[contributor][address(0)];
@@ -55,11 +64,19 @@ contract SwarmPoweredFundraiseMock is SwarmPoweredFundraise {
         return qualifiedSums[token] + bufferedSums[token];
     }
 
-    function acceptContribution(address contributor, uint256 sequence) external returns (bool) {
+    function acceptContribution(address contributor, uint256 sequence) external pure returns (bool) {
+        address c; c = contributor;
+        uint256 s; s = sequence;
         return true;
     }
 
-    function rejectContribution(address contributor, uint256 sequence) external returns (bool) {
+    function rejectContribution(address contributor, uint256 sequence) external pure returns (bool) {
+        address c; c = contributor;
+        uint256 s; s = sequence;
         return true;
+    }
+
+    function setNumContributorsToMax() external {
+        numberOfContributors = ContributorRestrictions(contributorRestrictions).maxContributors();
     }
 }
