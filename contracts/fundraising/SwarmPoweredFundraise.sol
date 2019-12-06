@@ -229,7 +229,7 @@ contract SwarmPoweredFundraise {
         uint256 sum;
         for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
             address currency = acceptedCurrencies[i];
-            sum += cr.toBCY(bufferedContributions[contributor][currency], currency);
+            sum += cr.toBCY(bufferedContributions[contributor][currency], currency); // @TODO safe math
         }
         return sum;
     }
@@ -245,7 +245,7 @@ contract SwarmPoweredFundraise {
         uint256 sum;
         for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
             address currency = acceptedCurrencies[i];
-            sum += cr.toBCY(qualifiedContributions[contributor][currency], currency);
+            sum += cr.toBCY(qualifiedContributions[contributor][currency], currency); // @TODO Safe math
         }
         return sum;
     }
@@ -261,7 +261,7 @@ contract SwarmPoweredFundraise {
         uint256 sum;
         for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
             address currency = acceptedCurrencies[i];
-            sum += cr.toBCY(qualifiedSums[currency], currency);
+            sum += cr.toBCY(qualifiedSums[currency], currency); // @TODO safe math
         }
         return sum;
     }
@@ -284,7 +284,7 @@ contract SwarmPoweredFundraise {
             address currency = acceptedCurrencies[i];
             if(bufferedContributions[contributor][currency] == 0)
                 continue;
-            sum += _addContribution(contributor, currency, bufferedContributions[contributor][currency]);
+            sum += _addContribution(contributor, currency, bufferedContributions[contributor][currency]); // @TODO safe math
         }
         return sum;
     }
@@ -316,7 +316,7 @@ contract SwarmPoweredFundraise {
         uint256 previousContributionsBCY = getQualifiedContributionsBCY(contributor);
 
         // get the total with this contribution
-        uint256 contributionsBCY = previousContributionsBCY + amountBCY;
+        uint256 contributionsBCY = previousContributionsBCY + amountBCY; // @TODO Safe math
 
         // if we are above with previous amount, due to exchange rate fluctuations, return
         if (previousContributionsBCY >= maxAmountBCY)
@@ -325,11 +325,11 @@ contract SwarmPoweredFundraise {
         // if we cross the max, take only a portion of the contribution, via a percentage
         uint256 qualifiedAmount = amount;
         if (contributionsBCY > maxAmountBCY)
-            qualifiedAmount = amount * (maxAmountBCY - previousContributionsBCY) / amountBCY;
+            qualifiedAmount = amount * (maxAmountBCY - previousContributionsBCY) / amountBCY; // @TODO safe math
 
         // leave the extra in the buffer, get the all the rest
-        bufferedContributions[contributor][currency] -= qualifiedAmount;
-        bufferedSums[currency] -= qualifiedAmount;
+        bufferedContributions[contributor][currency] -= qualifiedAmount; // @TODO safe math
+        bufferedSums[currency] -= qualifiedAmount; // @TODO safe math
 
         // if this is the first time he's contributing, increase the contributor counter
         if (contributionsList[contributor].length == 0)
@@ -344,15 +344,15 @@ contract SwarmPoweredFundraise {
         contributionsList[contributor].push(c);
 
         // adjust the global and historical sums
-        qualifiedContributions[contributor][currency] += qualifiedAmount;
-        qualifiedSums[currency] += qualifiedAmount;
+        qualifiedContributions[contributor][currency] += qualifiedAmount; // @TODO safe math
+        qualifiedSums[currency] += qualifiedAmount; // @TODO safe math
         Utils.Balance memory balance;
         balance.sequence = sequence;
         balance.balance = qualifiedSums[currency];
         historicalBalance[currency].push(balance);
 
         emit ContributionReceived(contributor, qualifiedAmount, sequence, currency);
-        return qualifiedAmount - amount;
+        return qualifiedAmount - amount; // @TODO safe math
     }
 
     /**
@@ -469,16 +469,16 @@ contract SwarmPoweredFundraise {
     {
         if (bytes(affiliateLink).length > 0) {
             // send the reward to referee's buffer
-            (address affiliate, uint256 percentage) = 
+            (address affiliate, uint256 percentage) =
                 IAffiliateManager(affiliateManager).getAffiliate(affiliateLink);
-            bufferedContributions[affiliate][currency] += amount * percentage;
+            bufferedContributions[affiliate][currency] += amount * percentage; // @TODO safe math
             // adjust the amount
-            amount -= amount * percentage;
+            amount -= amount * percentage; // @TODO safe math
         }
 
         // add the contribution to the buffer
-        bufferedContributions[contributor][currency] += amount;
-        bufferedSums[currency] += amount;
+        bufferedContributions[contributor][currency] += amount; // @TODO safe math
+        bufferedSums[currency] += amount; // @TODO safe math
 
         // Check whether contributor is prevented from contributing
         // @TODO rename function to checkRestrictions
@@ -539,7 +539,7 @@ contract SwarmPoweredFundraise {
             isFinished == true || block.timestamp > endDate.add(expirationTime),
             "Fundraise has not finished!"
         );
-        require(contributionsLocked == false, "Contributions are locked until expiry!");
+        require(contributionsLocked == false, "Contributions are locked until expiry!"); // @TODO Maybe unnecessary line
 
         Utils.getRefund(
             msg.sender,
@@ -577,7 +577,7 @@ contract SwarmPoweredFundraise {
         // find out the token price
         // @TODO include Presale in this
         SRC20tokenPriceBCY = SRC20tokenPriceBCY > 0 ?
-                             SRC20tokenPriceBCY : fundraiseAmountBCY / SRC20tokenSupply;
+                             SRC20tokenPriceBCY : fundraiseAmountBCY / SRC20tokenSupply; // @TODO safe math
 
         isFinished = true;
         return true;
@@ -669,7 +669,7 @@ contract SwarmPoweredFundraise {
     function stakeAndMint() public returns (bool) {
 
         uint256 numSRC20Tokens = SRC20tokenSupply > 0 ?
-                                 SRC20tokenSupply : fundraiseAmountBCY / SRC20tokenPriceBCY;
+                                 SRC20tokenSupply : fundraiseAmountBCY / SRC20tokenPriceBCY; //@TODO safe math
         IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
 
         _finishFundraise();

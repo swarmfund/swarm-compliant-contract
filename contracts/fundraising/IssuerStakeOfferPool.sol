@@ -11,7 +11,7 @@ import "../interfaces/IIssuerStakeOfferPool.sol";
  * @title The Issuer Stake Offer Pool Contract
  *
  * This contract allows the anyone to register as provider/seller of SWM tokens.
- * While registering, the SWM tokens are transferred from the provider to the 
+ * While registering, the SWM tokens are transferred from the provider to the
  * contract. The unsold SWM can be withdrawn at any point in time by unregistering.
  */
 contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
@@ -20,7 +20,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
 
     // Setup variables that don't change
 
-    address public src20Registry; // @TODO check why we need this - 
+    address public src20Registry; // @TODO check why we need this -
                                   // Answer: The idea was to do stakeAndMint here, we can discuss later
     uint256 public minTokens;
     uint256 public maxMarkup;
@@ -63,17 +63,17 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
 
         require(swmAmount >= minTokens, 'Registration failed: offer more tokens!');
         require(providerCount < maxProviderCount, 'Registration failed: all slots full!');
-        // require(markup <= maxMarkup, 'Registration failed: offer smaller markup!');
+        // require(markup <= maxMarkup, 'Registration failed: offer smaller markup!'); @TODO uncomment this
 
         // Transfer SWM to the ISOP contract. We need to do this to prevent fake postings
-        require(IERC20(swarmERC20).transferFrom(msg.sender, address(this), swmAmount), 
+        require(IERC20(swarmERC20).transferFrom(msg.sender, address(this), swmAmount),
                 'Registration failed: ERC20 transfer failed!');
 
         _addToList(msg.sender, markup);
         providerList[msg.sender].tokens = swmAmount;
         providerList[msg.sender].markup = markup;
 
-        providerCount++;
+        providerCount++; // @TODO this number is wrong, when someone register it still reincrements
         return true;
     }
 
@@ -232,14 +232,14 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
 
     // Loop through the linked list of providers, buy SWM tokens from them until we have enough
     function loopBuySWMTokens(
-        uint256 numSWM, 
+        uint256 numSWM,
         uint256 _maxMarkup
-    ) 
-        public 
-        payable 
-        returns (bool) 
+    )
+        public
+        payable
+        returns (bool)
     {
-        // Convert figures 
+        // Convert figures
         // @TODO note that we don't have a real market here, but a type of a bonding curve
         (uint256 swmPriceUSDnumerator, uint256 swmPriceUSDdenominator) = IPriceUSD(swmPriceOracle).getPrice();
         uint256 requiredUSD = numSWM * swmPriceUSDnumerator / swmPriceUSDdenominator;

@@ -54,7 +54,9 @@ contract ContributorRestrictions is IContributorRestrictions, ContributorWhiteli
                  true :
                  SwarmPoweredFundraise(fundraise).numberOfContributors() < maxContributors,
             "Max number of contributors exceeded!"
-        );
+        ); //@TODO should this return true/false and caller decides if their is need for revert/require
+
+        return true;
     }
 
     function whitelistAccount(address account) external onlyAuthorised {

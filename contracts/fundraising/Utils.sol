@@ -76,13 +76,13 @@ library Utils {
     {
         uint256 amountWithdrawn;
         for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
-            // @TODO add sums and qualifiedContributions handling
+            // @TODO add sums and qualifiedContributions handling !!!!!
             if (contributionsList[contributor][i].currency != address(0))
                 continue;
             if (contributionsList[contributor][i].status != ContributionStatus.Refundable)
                 continue;
-            msg.sender.transfer(contributionsList[contributor][i].amount);
-            amountWithdrawn += contributionsList[contributor][i].amount;
+            msg.sender.transfer(contributionsList[contributor][i].amount); // @TODO require()
+            amountWithdrawn += contributionsList[contributor][i].amount; // @TODO safemath
             contributionsList[contributor][i].status = ContributionStatus.Refunded;
         }
 
@@ -91,8 +91,8 @@ library Utils {
         // withdraw from the buffer too
         uint256 bufferAmount = bufferedContributions[contributor][address(0)];
         if (bufferAmount > 0) {
-            msg.sender.transfer(bufferAmount);
-            amountWithdrawn += bufferAmount;
+            msg.sender.transfer(bufferAmount); // @TODO required
+            amountWithdrawn += bufferAmount;// @TODO safemath
             bufferedContributions[contributor][address(0)] = 0;
         }
 
@@ -123,7 +123,7 @@ library Utils {
                 "ERC20 transfer failed!"
             );
             bufferedContributions[contributor][currency] = 0;
-            sum += amount;
+            sum += amount;// @TODO safemath
         }
         return sum;
     }
@@ -166,7 +166,7 @@ library Utils {
             contributionsList[contributor][i].status = ContributionStatus.Refunded;
             qualifiedContributions[contributor][currency] = 0;
 
-            amount += _refundBufferedERC20(
+            amount += _refundBufferedERC20( // @TODO safemath
                 contributor,
                 acceptedCurrencies,
                 bufferedContributions
@@ -259,9 +259,9 @@ library Utils {
         uint256 fundraiseAmountBCY,
         uint256 totalIssuerWithdrawalsBCY,
         mapping(address => uint256) storage qualifiedSums
-    ) 
+    )
         internal
-        returns (uint256) 
+        returns (uint256)
     {
         uint256 totalBCY;
         for (uint256 i = 0; i < acceptedCurrencies.length; i++)
@@ -365,7 +365,7 @@ library Utils {
         // go through a contributor's contributions, sum up those qualified for
         // converting into tokens
         uint256 totalContributorAcceptedBCY = 0;
-        for (uint256 i = 0; i<contributionsList[msg.sender].length; i++) {
+        for (uint256 i = 0; i < contributionsList[msg.sender].length; i++) {
             // to make sure we pay him out only once
             if (contributionsList[msg.sender][i].status != ContributionStatus.Refundable)
                 continue;
@@ -385,18 +385,17 @@ library Utils {
                 historicalBalance
             );
             // Whether we take the whole amount...
-            if(historicalBalanceBCY + contributionBCY < fundraiseAmountBCY) {
-                totalContributorAcceptedBCY += contributionBCY;
-            }
-            else { // ...or just a part of it
-                totalContributorAcceptedBCY += fundraiseAmountBCY - historicalBalanceBCY;
-                uint256 refund = historicalBalanceBCY + contributionBCY - fundraiseAmountBCY;
-                bufferedContributions[msg.sender][contributionsList[msg.sender][i].currency] += refund;
+            if (historicalBalanceBCY + contributionBCY < fundraiseAmountBCY) { //@TODO safe math
+                totalContributorAcceptedBCY += contributionBCY; //@TODO safe math
+            } else { // ...or just a part of it
+                totalContributorAcceptedBCY += fundraiseAmountBCY - historicalBalanceBCY; //@TODO safe math
+                uint256 refund = historicalBalanceBCY + contributionBCY - fundraiseAmountBCY; //@TODO safe math
+                bufferedContributions[msg.sender][contributionsList[msg.sender][i].currency] += refund; //@TODO safe math
                 break; // we've hit the end, break from the loop
             }
         }
 
-        uint256 tokenAllotment = totalContributorAcceptedBCY / SRC20tokenPriceBCY;
+        uint256 tokenAllotment = totalContributorAcceptedBCY / SRC20tokenPriceBCY; //@TODO safe math, AND what happend with funds that are not allocated (/ is cellular division)
         ISRC20(src20).transfer(msg.sender, tokenAllotment);
         emit SRC20TokensClaimed(msg.sender, tokenAllotment);
         return 0;
@@ -479,7 +478,7 @@ library Utils {
         // @TODO check with business if this logic is acceptable
         for (uint256 i = 0; i < acceptedCurrencies.length; i++)
             lockedExchangeRate[acceptedCurrencies[i]] =
-                ICurrencyRegistry(currencyRegistry).toBCY(1, acceptedCurrencies[i]);
+                ICurrencyRegistry(currencyRegistry).toBCY(1, acceptedCurrencies[i]); // @TODO 1 should be multiplied with decimals
 
         return true;
     }
