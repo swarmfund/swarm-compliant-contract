@@ -3,8 +3,8 @@ pragma solidity ^0.5.10;
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
-import "../interfaces/IPriceUSD.sol";
 import "../interfaces/IUniswap.sol";
+import "../interfaces/IPriceUSD.sol";
 import "../interfaces/IIssuerStakeOfferPool.sol";
 
 /**
@@ -50,12 +50,14 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         address _ethPriceOracle,
         address _swmPriceOracle,
         uint256 _minTokens,
+        uint256 _maxMarkup,
         uint256 _maxProviderCount)
     public {
         swmPriceOracle = _swmPriceOracle;
         swarmERC20 = _swarmERC20;
         uniswapUSDC = _ethPriceOracle;
         minTokens = _minTokens;
+        maxMarkup = _maxMarkup;
         maxProviderCount = _maxProviderCount;
     }
 
@@ -63,17 +65,20 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
 
         require(swmAmount >= minTokens, 'Registration failed: offer more tokens!');
         require(providerCount < maxProviderCount, 'Registration failed: all slots full!');
-        // require(markup <= maxMarkup, 'Registration failed: offer smaller markup!'); @TODO uncomment this
+        require(markup <= maxMarkup, 'Registration failed: offer smaller markup!');
 
         // Transfer SWM to the ISOP contract. We need to do this to prevent fake postings
         require(IERC20(swarmERC20).transferFrom(msg.sender, address(this), swmAmount),
                 'Registration failed: ERC20 transfer failed!');
 
         _addToList(msg.sender, markup);
+
+        if(providerList[msg.sender].tokens == 0)
+            providerCount++;
+
         providerList[msg.sender].tokens = swmAmount;
         providerList[msg.sender].markup = markup;
 
-        providerCount++; // @TODO this number is wrong, when someone register it still reincrements
         return true;
     }
 
@@ -224,8 +229,10 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
             priceETH += getSWMPriceETH(i, tokens);
         }
 
-        // Or, if we have not collected enough, return 0? @TODO think about this
-        require(tokensCollected == _swmAmount, 'Not enough SWM on the ISOP contract match your criteria!');
+        require(
+            tokensCollected == _swmAmount, 
+            'Not enough SWM on the ISOP contract match your criteria!'
+        );
 
         return priceETH;
     }
@@ -240,7 +247,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         returns (bool)
     {
         // Convert figures
-        // @TODO note that we don't have a real market here, but a type of a bonding curve
+        // NOTE: we don't have a real market here, but a type of a bonding curve
         (uint256 swmPriceUSDnumerator, uint256 swmPriceUSDdenominator) = IPriceUSD(swmPriceOracle).getPrice();
         uint256 requiredUSD = numSWM * swmPriceUSDnumerator / swmPriceUSDdenominator;
 
@@ -253,7 +260,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         uint256 tokenValueUSD;
         uint256 tokenValueETH;
         address i = head;
-        // @TODO check looping, we should either go from 0 -> head or to head -> 0...
+
         while (i != address(0)) {
 
             // If this one is too expensive, skip to the next
@@ -301,11 +308,10 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         require(IERC20(swarmERC20).allowance(account, msg.sender) >= numSWM, 'Purchase failed: allowance not set!');
 
         // Calculate whether the price is good
-        // @TODO convert to SafeMath when happy with logic
         (uint256 swmPriceUSDnumerator, uint256 swmPriceUSDdenominator) = IPriceUSD(swmPriceOracle).getPrice();
-        uint256 requiredUSD = numSWM * (swmPriceUSDnumerator / swmPriceUSDdenominator);
+        uint256 requiredUSD = numSWM.mul(swmPriceUSDnumerator.div(swmPriceUSDdenominator));
 
-        // Not the same as on a deep market. @TODO check with client if this is OK
+        // Not the same as on a deep market
         uint256 receivedUSD = IUniswap(uniswapUSDC).getTokenToEthOutputPrice(msg.value);
 
         uint256 markup = receivedUSD / requiredUSD * 100;

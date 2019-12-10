@@ -93,7 +93,7 @@ contract CurrencyRegistry is Ownable {
         return currencies;
     }
 
-    function toUSDC(
+    function toUSD(
         uint256 amount,
         address currencyFrom
     //uint256 decimals

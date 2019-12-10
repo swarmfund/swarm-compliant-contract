@@ -17,7 +17,7 @@ interface ICurrencyRegistry {
 
     function lockExchangeRates() external returns (bool);
 
-    function toUSDC(
+    function toUSD(
         uint256 amount,
         address currencyFrom
         //uint256 decimals

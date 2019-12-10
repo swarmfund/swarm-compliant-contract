@@ -22,18 +22,24 @@ contract SwarmPoweredFundraise {
     event ContributionReceived(address indexed from, uint256 amount, uint256 sequence, address baseCurrency);
     event ContributorAccepted(address contributor);
 
-    // Setup variables that never change
+    // variables that are set up once and never change
+    string public label;
     address internal ETH = address(0);
     address private owner;
-    string public label;
-
-    // @TODO Some parameters can be moved to separate contract either extendie 
-    // or total separation e.g. fundraisingConfiguration
     uint256 public startDate;
     uint256 public endDate;
     uint256 public minAmountBCY;
     uint256 public maxAmountBCY;
     uint256 public expirationTime = 7776000; // default: 60 * 60 * 24 * 90 = ~3months
+    address public src20;
+    address public minter;
+    address public affiliateManager;
+    address public contributorRestrictions;
+    address public currencyRegistry;
+    ICurrencyRegistry internal cr;
+    bool public offchainContributionsAllowed; // default == false;
+    address[] internal acceptedCurrencies;
+
     // variables that can change over time
     uint256 internal sequence;
     uint256 public softCapBCY;
@@ -43,19 +49,9 @@ contract SwarmPoweredFundraise {
     uint256 public fundraiseAmountBCY;
     uint256 public numberOfContributors;
     uint256 public totalIssuerWithdrawalsBCY;
-
-    address public src20;
-    address public minter;
     address payable issuerWallet;
-    address public affiliateManager;
-    address public contributorRestrictions;
-    address[] internal acceptedCurrencies;
-    address public currencyRegistry;
-    ICurrencyRegistry internal cr;
-
     bool public isFinished; // default == false;
     bool public setupCompleted; // default == false
-    bool public offchainContributionsAllowed; // default == false;
     bool public contributionsLocked = true;
 
     // per contributor, iterable list of his contributions, where each contribution
@@ -205,9 +201,9 @@ contract SwarmPoweredFundraise {
             address currency = acceptedCurrencies[i];
             sum = sum.add(
                 cr.toBCY(
-                    qualified == true ? 
+                    qualified == true ?
                         qualifiedContributions[contributor][currency] :
-                        bufferedContributions[contributor][currency], 
+                        bufferedContributions[contributor][currency],
                     currency
                 )
             );
@@ -224,7 +220,7 @@ contract SwarmPoweredFundraise {
      *  @param amount the amount of the contribution we are adding
      *  @return true on success
      */
-    function addOffchainContribution( 
+    function addOffchainContribution(
         address contributor,
         address currency,
         uint256 amount
@@ -458,30 +454,25 @@ contract SwarmPoweredFundraise {
     {
         // This has all the conditions and will blow up if they are not met
         uint256 numSRC20Tokens = _finishFundraise();
-        
+
+        // Without using ISOP...
         if(ISOP == address(0)) {
             IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
             // Withdraw (to the issuer) the ETH and the Tokens
             _withdrawRaisedFunds();
             return true;
         }
-        
-        // @TODO investigate: IIssuerStakeOfferPool(ISOP).stakeAndMint(addressList, maxMarkup, swmAmount, ...)
-        // @TODO Update the NAV, but this contract is not allowed to do it...
-        // assetRegistry.updateNetAssetValueUSD(src20, netAssetValueUSD);
-        uint256 netAssetValueUSD = cr.toUSDC(fundraiseAmountBCY, cr.getBaseCurrency());
-        uint256 swmAmount = IGetRateMinter(minter).calcStake(netAssetValueUSD);
 
-        uint256 spentETH;
-        uint256 priceETH;
-
-        // we want ISOP to determine providers
-        priceETH = IIssuerStakeOfferPool(ISOP).loopGetSWMPriceETH(swmAmount, maxMarkup);
-        IIssuerStakeOfferPool(ISOP).loopBuySWMTokens.value(priceETH)(swmAmount, maxMarkup);
+        // Using ISOP...
+        // @TODO investigate: IIssuerStakeOfferPool(ISOP).stakeAndMint()
         // NOTE: one day, rework to accept all currencies, not just ETH
+        uint256 netAssetValueUSD = cr.toUSD(fundraiseAmountBCY, cr.getBaseCurrency());
+        uint256 swmAmount = IGetRateMinter(minter).calcStake(netAssetValueUSD);
+        uint256 neededETH = IIssuerStakeOfferPool(ISOP).loopGetSWMPriceETH(swmAmount, maxMarkup);
+        IIssuerStakeOfferPool(ISOP).loopBuySWMTokens.value(neededETH)(swmAmount, maxMarkup);
 
-        // decrease the global ETH balance
-        qualifiedSums[ETH] = qualifiedSums[ETH].sub(spentETH);
+        // decrease the global ETH balance, so as to not be able to withdraw this ETH again
+        qualifiedSums[ETH] = qualifiedSums[ETH].sub(neededETH);
 
         // Stake and mint
         IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
