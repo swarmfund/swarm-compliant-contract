@@ -1,7 +1,7 @@
 pragma solidity ^0.5.0;
 
 import "../interfaces/IContributorRestrictions.sol";
-import "./ContributorWhitelist.sol";
+import "../fundraising/ContributorWhitelist.sol";
 import "../fundraising/SwarmPoweredFundraise.sol";
 import "../roles/DelegateRole.sol";
 

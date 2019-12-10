@@ -1,8 +1,8 @@
 pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "./SwarmPoweredFundraise.sol";
-import "./ContributorRestrictions.sol";
+import "../fundraising/SwarmPoweredFundraise.sol";
+import "../fundraising/ContributorRestrictions.sol";
 
 /**
  * @title The Fundraise Contract

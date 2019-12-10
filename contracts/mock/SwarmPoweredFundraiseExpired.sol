@@ -1,19 +1,21 @@
 pragma solidity ^0.5.0;
 
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "./SwarmPoweredFundraise.sol";
+import "../fundraising/SwarmPoweredFundraise.sol";
 
 /**
  * @title The Fundraise Contract
  * This contract allows the deployer to perform a Swarm-Powered Fundraise.
  */
-contract SwarmPoweredFundraiseCanceled is SwarmPoweredFundraise {
+contract SwarmPoweredFundraiseExpired is SwarmPoweredFundraise {
 
     using SafeMath for uint256;
     // array
-    bool isOngoing = false;
+
+    bool isOngoing = true;
     bool isFinished = false;
-    bool isCancelled = true;
+    uint256 public endDate = 1573044338;
+    uint256 public expiryPeriod = 7890000; // ~3 months in seconds
 
     constructor(
         string memory _label,

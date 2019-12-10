@@ -9,7 +9,7 @@ import "../interfaces/ICurrencyRegistry.sol";
 import "../interfaces/IIssuerStakeOfferPool.sol";
 import "../interfaces/IContributorRestrictions.sol";
 
-import "./Utils.sol";
+import "../fundraising/Utils.sol";
 
 /**
  * @title The Fundraise Contract
@@ -46,7 +46,7 @@ contract SwarmPoweredFundraise {
 
     address public src20;
     address public contributorRestrictions;
-    address public SwarmERC20;
+    // address public SwarmERC20;
     address public minter;
     address payable issuerWallet;
     address public affiliateManager;
@@ -191,8 +191,9 @@ contract SwarmPoweredFundraise {
 
     /**
      *  Loop through currencies and get the value (in BCY) of all the
-     *  contributor's buffered contributions
+     *  contributor's contributions, either qualified or buffered
      *  @param contributor the address of the contributor
+     *  @param qualified whether to add up the qualified or the buffered
      *  @return sum of all buffered contributions for the contributor,
      *          converted to BCY
      */
