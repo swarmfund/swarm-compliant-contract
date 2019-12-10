@@ -10,7 +10,7 @@ import "../interfaces/IIssuerStakeOfferPool.sol";
 /**
  * @title The Issuer Stake Offer Pool Contract
  *
- * This contract allows the anyone to register as provider/seller of SWM tokens.
+ * This contract allows anyone to register as provider/seller of SWM tokens.
  * While registering, the SWM tokens are transferred from the provider to the
  * contract. The unsold SWM can be withdrawn at any point in time by unregistering.
  */
@@ -50,8 +50,10 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         address _swmPriceOracle,
         uint256 _minTokens,
         uint256 _maxMarkup,
-        uint256 _maxProviderCount)
-    public {
+        uint256 _maxProviderCount
+    )
+    public 
+    {
         swmPriceOracle = _swmPriceOracle;
         swarmERC20 = _swarmERC20;
         uniswapUSDC = _ethPriceOracle;
@@ -66,23 +68,31 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         require(providerCount < maxProviderCount, 'Registration failed: all slots full!');
         require(markup <= maxMarkup, 'Registration failed: offer smaller markup!');
 
-        // Transfer SWM to the ISOP contract. We need to do this to prevent fake postings
-        require(IERC20(swarmERC20).transferFrom(msg.sender, address(this), swmAmount),
-                'Registration failed: ERC20 transfer failed!');
+        if(providerList[msg.sender].tokens > 0) {
+            _removeFromList(msg.sender);
+            providerCount = providerCount.sub(1);
+        }
 
-        _addToList(msg.sender, markup);
-
-        if(providerList[msg.sender].tokens == 0)
-            providerCount.add(1);
+        providerCount = providerCount.add(1);
 
         providerList[msg.sender].tokens = swmAmount;
         providerList[msg.sender].markup = markup;
+
+        if(providerList[msg.sender].previous != address(0) || 
+           providerList[msg.sender].next != address(0) ||
+           msg.sender == head)
+            return true; // we exit so as to not add him twice
+
+        _addToList2(msg.sender);
 
         return true;
     }
 
     // Add an element to the sorted (ascending) linked list of elements
-    function _addToList(address provider, uint256 markup) internal returns (bool) {
+    // We make available two functions that can do this, _addToList1() and _addToList2()
+    // Only one is actually used
+    function _addToList1(address provider) 
+    public returns (bool) {
 
         // If we don't have any elements set it up as the first one
         if (head == address(0)) {
@@ -90,7 +100,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
             return true;
         }
 
-        if (providerList[head].markup >= markup) {
+        if (providerList[head].markup >= providerList[provider].markup) {
             if (providerList[provider].next != address(0) || providerList[provider].previous != address(0)) {
                 providerList[providerList[provider].previous].next = providerList[provider].next;
             }
@@ -100,7 +110,11 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
             head = provider;
         } else {
             address current = head;
-            while (providerList[current].next != address(0) && providerList[providerList[current].next].markup < markup) {
+            while (
+                providerList[current].next != address(0) 
+                && providerList[providerList[current].next].markup < providerList[provider].markup
+            ) 
+            {
                 current = providerList[current].next;
             }
 
@@ -120,61 +134,76 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
             }
         }
 
-        //        // If we have at least one element, loop through the list, add new element to correct place
-        //        address i = head;
-        //        while(i != address(0)) {
-        //
-        //            // If we are smaller or equal than the current element, insert us before it
-        //            if (providerList[provider].markup <= providerList[head].markup) {
-        //
-        //                if (i == head) {
-        //                    head = provider;
-        //                    providerList[provider].next = i;
-        //                    providerList[provider].previous = address(0);
-        //                }
-        //                else {
-        //                    providerList[providerList[provider].previous].next = providerList[provider].next;
-        //                    providerList[providerList[provider].next].previous = providerList[provider].previous;
-        //                }
-        //
-        //                return true;
-        //            }
-        //
-        //            providerList[provider].previous = i;
-        //            i = providerList[i].next;
-        //        }
-        //
-        //        // If the loop didn't place him, it means he's the last chap
-        //        // His .previous has been set above, his .next is 0 (set by default),
-        //        // here we just repoint the old last element to this one
-        //        providerList[providerList[provider].previous].next = provider; //this line???
+        return true;
+    }
+
+    // Add an element to the sorted (ascending) linked list of elements
+    // We make available two functions that can do this, _addToList1() and _addToList2()
+    // Only one is actually used
+    function _addToList2(address provider) 
+    public returns (bool) {
+
+        if(head == address(0)) {
+            head = provider;
+            return true;
+        }
+        // If we have at least one element, loop through the list, add new element to correct place
+        address i = head;
+        while(i != address(0)) {
+
+            // If we are smaller or equal than the current element, insert us before it
+            if (providerList[provider].markup <= providerList[i].markup) {
+
+                if (i == head) { // placing in front
+                    providerList[head].previous = provider;
+                    providerList[provider].next = head;
+                    providerList[provider].previous = address(0);
+                    head = provider;
+                }
+                else { // placing between two others
+                    providerList[provider].next = i;
+                    providerList[provider].previous = providerList[i].previous;
+                    providerList[providerList[i].previous].next = provider;
+                    providerList[i].previous = provider;
+                }
+
+                return true;
+            }
+            // we do this because the next line could set i to address(0)
+            // but we want to preserve information who was last before 0
+            providerList[provider].previous = i;
+
+            i = providerList[i].next;
+        }
+
+        // If the loop didn't place him, it means he's the last chap
+        // His .previous has been set above, his .next is 0 (set by default),
+        // here we just repoint the old last element to this one
+        providerList[providerList[provider].previous].next = provider;
 
         return true;
     }
 
     function _removeFromList(address provider) internal returns (bool) {
+        if (provider == head)
+            head = providerList[provider].next;
         providerList[providerList[provider].previous].next = providerList[provider].next;
         providerList[providerList[provider].next].previous = providerList[provider].previous;
         delete (providerList[provider]);
-
-        if (provider == head) {
-            delete head;
-        }
-
         return true;
     }
 
     function unRegister() external returns (bool) {
         _removeFromList(msg.sender);
 
-        providerCount.sub(1);
+        providerCount = providerCount.sub(1);
         return true;
     }
 
     function unRegister(address provider) external onlyOwner returns (bool) {
         _removeFromList(provider);
 
-        providerCount.sub(1);
+        providerCount = providerCount.sub(1);
         return true;
     }
 
@@ -275,7 +304,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
             providerList[i].tokens = providerList[i].tokens.sub(tokens);
             if (providerList[i].tokens == 0) {
                 _removeFromList(i);
-                providerCount.sub(1);
+                providerCount = providerCount.sub(1);
             }
 
             i = next;

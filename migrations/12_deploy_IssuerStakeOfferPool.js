@@ -17,6 +17,7 @@ module.exports = function (deployer) {
             DAI_ERC20,  // address _ethPriceOracle,
             DAI_ERC20,  // address _swmPriceOracle,
             0,          // uint256 _minTokens,
+            100000,     // uint256 _maxMarkup
             0           // uint256 _maxProviderCount)
         ).then(
         async issuerStakeOfferPool => {

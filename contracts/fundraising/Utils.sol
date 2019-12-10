@@ -253,36 +253,36 @@ library Utils {
         return arr[mid].balance;
     }
 
-    /**
-     *  Loop through the accepted currencies and initiate a withdrawal for
-     *  each currency, sending the funds to the Token Issuer
-     *
-     *  @return true on success
-     */
-    function withdrawRaisedFunds(
-        address payable issuerWallet,
-        address currencyRegistry,
-        address[] storage acceptedCurrencies,
-        uint256 fundraiseAmountBCY,
-        uint256 totalIssuerWithdrawalsBCY,
-        mapping(address => uint256) storage qualifiedSums
-    )
-        external
-        returns (uint256)
-    {
-        uint256 totalBCY;
-        for (uint256 i = 0; i < acceptedCurrencies.length; i++)
-            totalBCY += processIssuerWithdrawal(
-                issuerWallet,
-                acceptedCurrencies[i],
-                currencyRegistry,
-                totalIssuerWithdrawalsBCY,
-                fundraiseAmountBCY,
-                qualifiedSums
-            );
+    // /**
+    //  *  Loop through the accepted currencies and initiate a withdrawal for
+    //  *  each currency, sending the funds to the Token Issuer
+    //  *
+    //  *  @return true on success
+    //  */
+    // function withdrawRaisedFunds(
+    //     address payable issuerWallet,
+    //     address currencyRegistry,
+    //     address[] storage acceptedCurrencies,
+    //     uint256 fundraiseAmountBCY,
+    //     uint256 totalIssuerWithdrawalsBCY,
+    //     mapping(address => uint256) storage qualifiedSums
+    // )
+    //     external
+    //     returns (uint256)
+    // {
+    //     uint256 totalBCY;
+    //     for (uint256 i = 0; i < acceptedCurrencies.length; i++)
+    //         totalBCY += processIssuerWithdrawal(
+    //             issuerWallet,
+    //             acceptedCurrencies[i],
+    //             currencyRegistry,
+    //             totalIssuerWithdrawalsBCY,
+    //             fundraiseAmountBCY,
+    //             qualifiedSums
+    //         );
 
-        return totalBCY;
-    }
+    //     return totalBCY;
+    // }
 
     /**
      *  Process a single currency withdrawal by the Issuer, making sure not more
