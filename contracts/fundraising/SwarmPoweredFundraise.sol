@@ -23,6 +23,7 @@ contract SwarmPoweredFundraise {
     event ContributorAccepted(address contributor);
 
     // Setup variables that never change
+    address internal ETH = address(0);
     address private owner;
     string public label;
 
@@ -32,34 +33,30 @@ contract SwarmPoweredFundraise {
     uint256 public endDate;
     uint256 public minAmountBCY;
     uint256 public maxAmountBCY;
+    uint256 public expirationTime = 7776000; // default: 60 * 60 * 24 * 90 = ~3months
     // variables that can change over time
+    uint256 internal sequence;
     uint256 public softCapBCY;
     uint256 public hardCapBCY;
     uint256 public SRC20tokenPriceBCY;
     uint256 public SRC20tokensToMint;
     uint256 public fundraiseAmountBCY;
-    uint256 public sequence;
-    uint256 public expirationTime = 7776000; // default: 60 * 60 * 24 * 90 = ~3months
+    uint256 public numberOfContributors;
     uint256 public totalIssuerWithdrawalsBCY;
 
-    address public ETH = address(0);
-
     address public src20;
-    address public contributorRestrictions;
-    // address public SwarmERC20;
     address public minter;
     address payable issuerWallet;
     address public affiliateManager;
+    address public contributorRestrictions;
+    address[] internal acceptedCurrencies;
     address public currencyRegistry;
-    ICurrencyRegistry cr;
-    address[] acceptedCurrencies;
+    ICurrencyRegistry internal cr;
 
     bool public isFinished; // default == false;
-    bool public contributionsLocked = true;
-    bool public offchainContributionsAllowed; // default == false;
     bool public setupCompleted; // default == false
-
-    uint256 public numberOfContributors;
+    bool public offchainContributionsAllowed; // default == false;
+    bool public contributionsLocked = true;
 
     // per contributor, iterable list of his contributions, where each contribution
     // holds information about its position in the global queue of contributions
@@ -106,11 +103,16 @@ contract SwarmPoweredFundraise {
 
     // only allow if the fundraise has started and is ongoing
     modifier ongoing {
+        _ongoing();
+        _;
+    }
+
+    // forced by bytecode limitations, kept just below the modifier for clarity
+    function _ongoing() internal view returns (bool) {
         require(setupCompleted, "Fundraise setup not completed!");
         require(isFinished == false, "Fundraise has finished!");
         require(block.timestamp >= startDate, "Fundraise has not started yet!");
         require(block.timestamp <= endDate, "Fundraise has ended");
-        _;
     }
 
     /**
@@ -623,7 +625,7 @@ contract SwarmPoweredFundraise {
                              totalContributionsBCY : hardCapBCY;
 
         // Lock the exchange rates between the accepted currencies and BCY
-        // So that claimTokens() calculates correctly whenever called
+        // so that claimTokens() calculates correctly whenever called
         cr.lockExchangeRates();
 
         // find out the token price
