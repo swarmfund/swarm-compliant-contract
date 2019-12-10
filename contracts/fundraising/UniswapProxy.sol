@@ -13,7 +13,8 @@ contract UniswapProxy is Ownable {
     mapping(address => address) exchangeList;
 
     constructor() public {
-        // These are mainnet addresses
+        // These are mainnet addresses, prefilled for convenience
+        // After deployment, call addOrUpdateExchange to update/modify
         address erc20DAI = 0x89d24A6b4CcB1B6fAA2625fE562bDD9a23260359;
         exchangeList[erc20DAI] = 0x09cabEC1eAd1c0Ba254B09efb3EE13841712bE14;
         address erc20USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
@@ -42,11 +43,9 @@ contract UniswapProxy is Ownable {
         uint256 amount, 
         uint256 decimals
     ) 
-    external
-    returns (uint256, uint256)
+        external
+        returns (uint256, uint256)
     {
-        //return(0,0); // @DEBUG
-        
         // If same, just return the input
         if (currencyFrom == currencyTo)
             return (amount, decimals);
@@ -69,7 +68,6 @@ contract UniswapProxy is Ownable {
         uint256 amountETH = IUniswap(exchangeList[currencyFrom]).getTokenToEthInputPrice(amount);
         result = IUniswap(exchangeList[currencyTo]).getEthToTokenInputPrice(amountETH);
         return (result, 0);
-
     }
 
 }

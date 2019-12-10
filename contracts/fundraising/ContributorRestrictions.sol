@@ -37,25 +37,26 @@ contract ContributorRestrictions is IContributorRestrictions, ContributorWhiteli
         maxContributors = maxNumContributors;
     }
 
-    // checkRestrictions
     function isAllowed(address account) external view returns (bool) {
-        // if(
-        //     _whitelisted[account] &&
-        //     maxContributors == 0 ?
-        //         true :
-        //         SwarmPoweredFundraise(fundraise).numberOfContributors() < maxContributors
-        //     )
-        //     return true;
-        // else
-        //     return false;
+        if(
+            _whitelisted[account] &&
+            maxContributors == 0 ?
+                true :
+                SwarmPoweredFundraise(fundraise).numberOfContributors() < maxContributors
+            )
+            return true;
+        else
+            return false;
+    }
+
+    function checkRestrictions(address account) external view returns (bool) {
         require(_whitelisted[account], "Account not on whitelist!");
         require(
             maxContributors == 0 ?
                  true :
                  SwarmPoweredFundraise(fundraise).numberOfContributors() < maxContributors,
             "Max number of contributors exceeded!"
-        ); //@TODO should this return true/false and caller decides if their is need for revert/require
-
+        );
         return true;
     }
 

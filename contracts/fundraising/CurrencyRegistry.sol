@@ -14,9 +14,7 @@ contract CurrencyRegistry is Ownable {
 
     using SafeMath for uint256;
 
-    enum Currencies {ETH, DAI, USDC, WBTC}
-
-    address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // @TODO this needs to be configurable in order to test
+    address USDERC20 = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // call setUSDERC20() to change
 
     address ETH = address(0);
 
@@ -36,19 +34,27 @@ contract CurrencyRegistry is Ownable {
 
     address public baseCurrency; // address(0) == ETH
 
-    constructor(
+    // per currency, its final exchange rate to BCY
+    mapping(address => uint256) lockedExchangeRate;
 
+    constructor(
     )
         public 
     {
         // Add just ETH at deployment
         // EDIT: we cannot because we don't have an exchange for it!
+        //       well, we can but need to pass exchangeProxy as constructor parameter
         // CurrencyStats memory c;
         // c.erc20address = address(0);
         // c.exchangeProxy = address(0);
         // currenciesList.push(c);
         // currencyIndex[address(0)] = 0;
         // setBaseCurrency(address(0));
+    }
+
+    function setUSDERC20(address usdErc20) external onlyOwner() returns (bool) {
+        USDERC20 = usdErc20;
+        return true;
     }
 
     function isAccepted(address currency) public view returns (bool) {
@@ -99,7 +105,7 @@ contract CurrencyRegistry is Ownable {
         (uint256 rAmount,) =
         IExchange(currenciesList[currencyIndex[currencyFrom]].exchangeProxy).getRate(
             currencyFrom,
-            USDC,
+            USDERC20,
             amount,
             0
         //decimals
@@ -112,30 +118,11 @@ contract CurrencyRegistry is Ownable {
         address currencyFrom
     //, uint256 decimals
     )
-    external
+    public
         // returns (uint256 outAmount, uint256 outDecimals)
     returns (uint256 outAmount)
     {
         uint256 rAmount;
-        //return 0; // @DEBUG
-
-        // // For ETH, piggyback on the other currency's exchange
-        // if(currencyFrom == address(0)) {
-        //     if(baseCurrency == address(0))
-        //         return amount;
-
-        //     (rAmount,) =
-        //     IExchange(currenciesList[currencyIndex[baseCurrency]].exchangeProxy).getRate(
-        //         currencyFrom,
-        //         baseCurrency,
-        //         amount,
-        //         0
-        //     //decimals
-        //     );
-        //     return rAmount;
-        // }
-
-        //return 7; // @DEBUG
 
         (rAmount,) =
         IExchange(currenciesList[currencyIndex[currencyFrom]].exchangeProxy).getRate(
@@ -164,6 +151,22 @@ contract CurrencyRegistry is Ownable {
             amount,
             decimals
         );
+    }
+
+    /**
+     *  Loop through the accepted currencies and lock the exchange rates
+     *  between each of them and BCY
+     *  @return true on success
+     */
+    function lockExchangeRates()
+        external
+        returns (bool)
+    {
+        for (uint256 i = 0; i < currenciesList.length; i++)
+            lockedExchangeRate[currenciesList[i].erc20address] =
+                toBCY(10**18, currenciesList[i].erc20address);
+
+        return true;
     }
 
 }

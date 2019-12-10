@@ -15,6 +15,8 @@ interface ICurrencyRegistry {
 
     function getAcceptedCurrencies() external returns (address[] memory);
 
+    function lockExchangeRates() external returns (bool);
+
     function toUSDC(
         uint256 amount,
         address currencyFrom

@@ -3,12 +3,9 @@ pragma solidity ^0.5.0;
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 
-import "../interfaces/ISRC20.sol";
-import "../interfaces/IUniswap.sol";
 import "../interfaces/IGetRateMinter.sol";
 import "../interfaces/IAffiliateManager.sol";
 import "../interfaces/ICurrencyRegistry.sol";
-import "../interfaces/IContributionRules.sol";
 import "../interfaces/IIssuerStakeOfferPool.sol";
 import "../interfaces/IContributorRestrictions.sol";
 
@@ -20,38 +17,34 @@ import "./Utils.sol";
  */
 contract SwarmPoweredFundraise {
 
-    address private owner;
-
     using SafeMath for uint256;
-    // @TODO convert all math in the contract to SafeMath once happy with logic
 
     event ContributionReceived(address indexed from, uint256 amount, uint256 sequence, address baseCurrency);
     event ContributorAccepted(address contributor);
 
     // Setup variables that never change
+    address private owner;
     string public label;
 
-    uint256 public startDate; // Some parameters can be moved to separate contract either extendie or total separation e.g. fundraisingConfiguration
+    // @TODO Some parameters can be moved to separate contract either extendie 
+    // or total separation e.g. fundraisingConfiguration
+    uint256 public startDate;
     uint256 public endDate;
     uint256 public minAmountBCY;
     uint256 public maxAmountBCY;
-    uint256 public preSaleAmountBCY; // the amount raised in the Presale phase, in base currency
-    uint256 public preSaleTokensReserved; // the number of SRC20 tokens reserved for the presale
     // variables that can change over time
     uint256 public softCapBCY;
     uint256 public hardCapBCY;
     uint256 public SRC20tokenPriceBCY;
-    uint256 public SRC20tokenSupply; // @TODO rethink the name
+    uint256 public SRC20tokensToMint;
     uint256 public fundraiseAmountBCY;
     uint256 public sequence;
     uint256 public expirationTime = 7776000; // default: 60 * 60 * 24 * 90 = ~3months
     uint256 public totalIssuerWithdrawalsBCY;
 
-    // @TODO see about this...
     address public ETH = address(0);
 
     address public src20;
-    address public contributionRules;
     address public contributorRestrictions;
     address public SwarmERC20;
     address public minter;
@@ -61,19 +54,17 @@ contract SwarmPoweredFundraise {
     ICurrencyRegistry cr;
     address[] acceptedCurrencies;
 
-    bool public isFinished = false;
-    bool public contributionsLocking = true;
+    bool public isFinished; // default == false;
     bool public contributionsLocked = true;
-    bool public offchainContributionsAllowed = false;
-    bool public setupCompleted = false;
+    bool public offchainContributionsAllowed; // default == false;
+    bool public setupCompleted; // default == false
 
     uint256 public numberOfContributors;
 
-    // @TODO maybe rename to contributionsQueue?
-    // per contributor, iterable list of his contributions
+    // per contributor, iterable list of his contributions, where each contribution
+    // holds information about its position in the global queue of contributions
     mapping(address => Utils.Contribution[]) contributionsList;
 
-    // @TODO think about naming: pending vs buffered
     // per contributor and currency, pending amount
     mapping(address => mapping(address => uint256)) public bufferedContributions;
 
@@ -86,9 +77,6 @@ contract SwarmPoweredFundraise {
 
     // per currency, total buffered sums
     mapping(address => uint256) public bufferedSums;
-
-    // per currency, its final exchange rate to BCY
-    mapping(address => uint256) lockedExchangeRate;
 
     // per currency, an array of historical balances
     mapping(address => Utils.Balance[]) historicalBalance;
@@ -118,8 +106,7 @@ contract SwarmPoweredFundraise {
 
     // only allow if the fundraise has started and is ongoing
     modifier ongoing {
-        require(SRC20tokenPriceBCY != 0 || SRC20tokenSupply != 0, "Token price or supply are not set");
-        require(setupCompleted, "Fundraise setup not completed!"); // why just don't check if affiliateManager&min&max
+        require(setupCompleted, "Fundraise setup not completed!");
         require(isFinished == false, "Fundraise has finished!");
         require(block.timestamp >= startDate, "Fundraise has not started yet!");
         require(block.timestamp <= endDate, "Fundraise has ended");
@@ -135,7 +122,7 @@ contract SwarmPoweredFundraise {
         string memory _label,
         address _src20,
         address _currencyRegistry,
-        uint256 _SRC20tokenSupply,
+        uint256 _SRC20tokensToMint,
         uint256 _startDate,
         uint256 _endDate,
         uint256 _softCapBCY,
@@ -149,7 +136,7 @@ contract SwarmPoweredFundraise {
         cr = ICurrencyRegistry(_currencyRegistry);
         acceptedCurrencies = cr.getAcceptedCurrencies();
         currencyRegistry = _currencyRegistry;
-        SRC20tokenSupply = _SRC20tokenSupply;
+        SRC20tokensToMint = _SRC20tokensToMint;
         startDate = _startDate;
         endDate = _endDate;
         softCapBCY = _softCapBCY;
@@ -178,7 +165,7 @@ contract SwarmPoweredFundraise {
         uint256 _maxAmountBCY,
         address _affiliateManager,
         address _contributorRestrictions,
-        address _contributionRules
+        bool _contributionsLocked
     )
     external
     onlyOwner()
@@ -187,23 +174,8 @@ contract SwarmPoweredFundraise {
         maxAmountBCY = _maxAmountBCY;
         affiliateManager = _affiliateManager;
         contributorRestrictions = _contributorRestrictions;
-        contributionRules = _contributionRules;
+        contributionsLocked = _contributionsLocked;
         setupCompleted = true;
-    }
-
-    /**
-     *  Unlock the contributions so that they can be withdrawn by contributors
-     *  This can be called by anyone if/when the fundraise expires
-     *
-     *  @return true on success
-     */
-    function unlockContributions() external returns (bool) {
-        require(
-            block.timestamp > endDate.add(expirationTime),
-            "Expiration time not passed!"
-        );
-        contributionsLocked = false;
-        return true;
     }
 
     /**
@@ -214,7 +186,6 @@ contract SwarmPoweredFundraise {
      */
     function cancelFundraise() external onlyOwner() returns (bool) {
         isFinished = true;
-        contributionsLocked = false;
         return true;
     }
 
@@ -225,134 +196,20 @@ contract SwarmPoweredFundraise {
      *  @return sum of all buffered contributions for the contributor,
      *          converted to BCY
      */
-    function getBufferedContributionsBCY (address contributor) public returns (uint256) {
+    function getContributionsBCY(address contributor, bool qualified) public returns (uint256) {
         uint256 sum;
         for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
             address currency = acceptedCurrencies[i];
-            sum += cr.toBCY(bufferedContributions[contributor][currency], currency); // @TODO safe math
+            sum = sum.add(
+                cr.toBCY(
+                    qualified == true ? 
+                        qualifiedContributions[contributor][currency] :
+                        bufferedContributions[contributor][currency], 
+                    currency
+                )
+            );
         }
         return sum;
-    }
-
-    /**
-     *  Loop through currencies and get the value (in BCY) of all the
-     *  contributor's qualified contributions
-     *  @param contributor the address of the contributor
-     *  @return sum of all qualified contributions for the contributor,
-     *          converted to BCY
-     */
-    function getQualifiedContributionsBCY(address contributor) public returns (uint256) {
-        uint256 sum;
-        for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
-            address currency = acceptedCurrencies[i];
-            sum += cr.toBCY(qualifiedContributions[contributor][currency], currency); // @TODO Safe math
-        }
-        return sum;
-    }
-
-    /**
-     *  Loop through currencies and get the value (in BCY) of all the
-     *  qualified contributions
-     *
-     *  @return sum of all qualified contributions, in all currencies,
-     *          converted to BCY
-     */
-    function getQualifiedSumsBCY() public returns (uint256) {
-        uint256 sum;
-        for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
-            address currency = acceptedCurrencies[i];
-            sum += cr.toBCY(qualifiedSums[currency], currency); // @TODO safe math
-        }
-        return sum;
-    }
-
-    /**
-     *  Loop through all the buffers (four now, but could be many more eventually)
-     *  and turn them into qualified contributions.
-     *
-     *  NOTE: this skips the minAmount checks!
-     *  NOTE: the maxAmount check is still performed
-     *
-     *  @param contributor the address of the contributor we are processing
-     *         buffered contributions for
-     *  @return 0 if all the contributions were accepted, overflow if some were above
-     *          maxAmount and were not added
-     */
-    function _addBufferedContributions(address contributor) internal returns (uint256) {
-        uint256 sum;
-        for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
-            address currency = acceptedCurrencies[i];
-            if(bufferedContributions[contributor][currency] == 0)
-                continue;
-            sum += _addContribution(contributor, currency, bufferedContributions[contributor][currency]); // @TODO safe math
-        }
-        return sum;
-    }
-
-// @TODO underscore functions should go on the bottom of the file
-    /**
-     *  Worker function that adds a contribution to the list of contributions
-     *  and updates all the relevant sums and balances
-     *
-     *  @param contributor the address of the contributor
-     *  @param currency the currency of the amount being added
-     *  @param amount the amount being added
-     *  @return 0 if the whole contribution was accepted, the overflow if it was above
-     *          maxAmount and only a part of it was accepted
-     */
-    function _addContribution(
-        address contributor,
-        address currency,
-        uint256 amount
-    )
-        internal
-        onlyAcceptedCurrencies(currency)
-        returns (uint256)
-    {
-        // convert the coming contribution to BCY
-        uint256 amountBCY = cr.toBCY(amount, currency);
-
-        // get the value in BCY of his previous qualified contributions
-        uint256 previousContributionsBCY = getQualifiedContributionsBCY(contributor);
-
-        // get the total with this contribution
-        uint256 contributionsBCY = previousContributionsBCY + amountBCY; // @TODO Safe math
-
-        // if we are above with previous amount, due to exchange rate fluctuations, return
-        if (previousContributionsBCY >= maxAmountBCY)
-            return amount;
-
-        // if we cross the max, take only a portion of the contribution, via a percentage
-        uint256 qualifiedAmount = amount;
-        if (contributionsBCY > maxAmountBCY)
-            qualifiedAmount = amount * (maxAmountBCY - previousContributionsBCY) / amountBCY; // @TODO safe math
-
-        // leave the extra in the buffer, get the all the rest
-        bufferedContributions[contributor][currency] -= qualifiedAmount; // @TODO safe math
-        bufferedSums[currency] -= qualifiedAmount; // @TODO safe math
-
-        // if this is the first time he's contributing, increase the contributor counter
-        if (contributionsList[contributor].length == 0)
-            numberOfContributors++;
-
-        Utils.Contribution memory c;
-        sequence++;
-        c.currency = currency;
-        c.amount = qualifiedAmount;
-        c.sequence = sequence;
-        c.status = Utils.ContributionStatus.Refundable;
-        contributionsList[contributor].push(c);
-
-        // adjust the global and historical sums
-        qualifiedContributions[contributor][currency] += qualifiedAmount; // @TODO safe math
-        qualifiedSums[currency] += qualifiedAmount; // @TODO safe math
-        Utils.Balance memory balance;
-        balance.sequence = sequence;
-        balance.balance = qualifiedSums[currency];
-        historicalBalance[currency].push(balance);
-
-        emit ContributionReceived(contributor, qualifiedAmount, sequence, currency);
-        return qualifiedAmount - amount; // @TODO safe math
     }
 
     /**
@@ -364,8 +221,7 @@ contract SwarmPoweredFundraise {
      *  @param amount the amount of the contribution we are adding
      *  @return true on success
      */
-/*  @TODO @DEBUG
-    function addOffchainContribution( // Their is no affiliate here. And maybe consider merging off-chain and onchain contribution functionality
+    function addOffchainContribution( 
         address contributor,
         address currency,
         uint256 amount
@@ -383,41 +239,22 @@ contract SwarmPoweredFundraise {
 
         // we've just whitelisted him but still need to check
         // for example it could be that max number of contributors has been exceeded
-        IContributorRestrictions(contributorRestrictions).isAllowed(contributor);
+        IContributorRestrictions(contributorRestrictions).checkRestrictions(contributor);
 
         // add the contribution to the buffer
-        bufferedContributions[contributor][currency] += amount;
+        bufferedContributions[contributor][currency] = bufferedContributions[contributor][currency]
+            .add(amount);
 
-        // add the contribution to the queue
-        uint256 overMax = _addContribution(contributor, currency, amount);
-        // the extra amount must never be refundable
-        bufferedContributions[contributor][currency] -= overMax;
+        // add the contribution to the queue and then subtract from buffered
+        // because any extra amount will have been added there by the function,
+        // but the extra amount must never be refundable
+        bufferedContributions[contributor][currency] = bufferedContributions[contributor][currency]
+            .sub(_addContribution(contributor, currency, amount));
 
         // set up the contribution we have just added so that it can not be withdrawn
-        contributionsList[contributor][contributionsList[contributor].length - 1]
+        contributionsList[contributor][contributionsList[contributor].length.sub(1)]
                          .status = Utils.ContributionStatus.Offchain;
 
-        return true;
-    }
-*/
-    /**
-     *  contribute ERC20 without an affiliate link
-     *
-     *  @param erc20 the currency of the contribution
-     *  @param amount the amount of the contribution
-     *  @return true on success
-     */
-    function contribute(
-        address erc20,
-        uint256 amount
-    )
-        public
-        ongoing
-        onlyAcceptedCurrencies(erc20)
-        returns (bool)
-    {
-        require(amount > 0, "Amount has to be positive!");
-        _contribute(msg.sender, erc20, amount, "");
         return true;
     }
 
@@ -465,24 +302,26 @@ contract SwarmPoweredFundraise {
         string memory affiliateLink
     )
         internal
+        onlyAcceptedCurrencies(currency)
         returns (bool)
     {
         if (bytes(affiliateLink).length > 0) {
             // send the reward to referee's buffer
             (address affiliate, uint256 percentage) =
                 IAffiliateManager(affiliateManager).getAffiliate(affiliateLink);
-            bufferedContributions[affiliate][currency] += amount * percentage; // @TODO safe math
+            bufferedContributions[affiliate][currency] = bufferedContributions[affiliate][currency]
+                .add(amount.mul(percentage));
             // adjust the amount
-            amount -= amount * percentage; // @TODO safe math
+            amount = amount.sub(amount.mul(percentage));
         }
 
         // add the contribution to the buffer
-        bufferedContributions[contributor][currency] += amount; // @TODO safe math
-        bufferedSums[currency] += amount; // @TODO safe math
+        bufferedContributions[contributor][currency] = bufferedContributions[contributor][currency]
+            .add(amount);
+        bufferedSums[currency] = bufferedSums[currency].add(amount);
 
         // Check whether contributor is prevented from contributing
-        // @TODO rename function to checkRestrictions
-        IContributorRestrictions(contributorRestrictions).isAllowed(contributor);
+        IContributorRestrictions(contributorRestrictions).checkRestrictions(contributor);
 
         // If he already has some qualified contributions, just process the new one
         // hmm is this the case??? whitelist/graylist?
@@ -494,7 +333,7 @@ contract SwarmPoweredFundraise {
         // If he never had qualified contributions before, see if he has now passed
         // the minAmountBCY and if so add his buffered contributions to qualified contributions
         // get the value in BCY of his buffered contributions
-        uint256 bufferedContributionsBCY = getBufferedContributionsBCY(contributor);
+        uint256 bufferedContributionsBCY = getContributionsBCY(contributor, false);
 
         // if the contributor is still below the minimum, return
         // what is the point of this return?
@@ -505,6 +344,297 @@ contract SwarmPoweredFundraise {
         _addBufferedContributions(contributor);
 
         return true;
+    }
+
+    /**
+     *  Allows contributor to get refunds of the amounts he contributed, if
+     *  various conditions are met
+     *
+     *  @return true on success
+     */
+    function getRefund() external returns (bool) {
+        require(
+            isFinished == true ||
+            block.timestamp > endDate.add(expirationTime) ||
+            contributionsLocked == false,
+            "Fundraise has not finished!"
+        );
+
+        Utils.getRefund(
+            msg.sender,
+            acceptedCurrencies,
+            contributionsList,
+            qualifiedContributions,
+            bufferedContributions,
+            qualifiedSums,
+            bufferedSums
+        );
+
+        return true;
+    }
+
+    /**
+     *  Once a contributor has been Whitelisted, this function gets called to
+     *  process his buffered/pending transactions
+     *
+     *  @param contributor the contributor we want to add
+     *  @return true on success
+     */
+    function acceptContributor(
+        address contributor
+    )
+        external
+        ongoing
+        onlyContributorRestrictions
+        returns (bool)
+    {
+        // get the value in BCY of his buffered contributions
+        uint256 bufferedContributionsBCY = getContributionsBCY(contributor, false);
+
+        // if we are still below the minimum, return
+        if (bufferedContributionsBCY < minAmountBCY)
+            return true;
+
+        // process all the buffers
+        _addBufferedContributions(contributor);
+
+        emit ContributorAccepted(contributor);
+        return true;
+    }
+
+    /**
+     *  Removes a contributor (his contributions)
+     *  This function can only be called by the Token Issuer (fundraise
+     *  contract owner) or by the restrictions/whitelisting contract
+     *
+     *  @param contributor the contributor we want to remove
+     *  @return true on success
+     */
+    function removeContributor(
+        address contributor
+    )
+        external
+        ongoing
+        onlyContributorRestrictions
+        returns (bool)
+    {
+        Utils.removeContributor(
+            contributor,
+            contributionsList,
+            bufferedContributions,
+            qualifiedContributions
+        );
+        // decrease the global counter of contributors
+        numberOfContributors = numberOfContributors.sub(1);
+
+        // get the value in BCY of his qualified contributions (that we shall give back)
+        uint256 qualifiedContributionsBCY = getContributionsBCY(contributor, true);
+
+        // adjust the caps, which are always in BCY
+        softCapBCY = softCapBCY.add(qualifiedContributionsBCY);
+        hardCapBCY = hardCapBCY.add(qualifiedContributionsBCY);
+
+        return true;
+    }
+
+    /**
+     *  Stake and Mint using ISOP to get SWM from specific providers
+     *  If ISOP parameter is address(0), SWM has to be on the fundraise contract
+     *
+     *  @param ISOP address of an ISOP contract
+     *  @param maxMarkup maximum markup the caller is willing to accept
+     *  @return true on success
+     */
+    function stakeAndMint(
+        address ISOP,
+        uint256 maxMarkup
+    )
+        public
+        onlyOwner()
+        returns (bool)
+    {
+        // This has all the conditions and will blow up if they are not met
+        uint256 numSRC20Tokens = _finishFundraise();
+        
+        if(ISOP == address(0)) {
+            IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
+            // Withdraw (to the issuer) the ETH and the Tokens
+            _withdrawRaisedFunds();
+            return true;
+        }
+        
+        // @TODO investigate: IIssuerStakeOfferPool(ISOP).stakeAndMint(addressList, maxMarkup, swmAmount, ...)
+        // @TODO Update the NAV, but this contract is not allowed to do it...
+        // assetRegistry.updateNetAssetValueUSD(src20, netAssetValueUSD);
+        uint256 netAssetValueUSD = cr.toUSDC(fundraiseAmountBCY, cr.getBaseCurrency());
+        uint256 swmAmount = IGetRateMinter(minter).calcStake(netAssetValueUSD);
+
+        uint256 spentETH;
+        uint256 priceETH;
+
+        // we want ISOP to determine providers
+        priceETH = IIssuerStakeOfferPool(ISOP).loopGetSWMPriceETH(swmAmount, maxMarkup);
+        IIssuerStakeOfferPool(ISOP).loopBuySWMTokens.value(priceETH)(swmAmount, maxMarkup);
+        // NOTE: one day, rework to accept all currencies, not just ETH
+
+        // decrease the global ETH balance
+        qualifiedSums[ETH] = qualifiedSums[ETH].sub(spentETH);
+
+        // Stake and mint
+        IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
+
+        // Withdraw (to the issuer) the ETH and the Tokens
+        _withdrawRaisedFunds();
+        return true;
+    }
+
+    /**
+     *  Allow the caller, if he is eligible, to withdraw his SRC20 tokens once
+     *  they have been minted
+     *
+     *  @return true on success
+     */
+    function claimTokens() external returns (uint256) {
+
+        require(isFinished, "Fundraise has not finished!");
+
+        Utils.claimTokens(
+            src20,
+            currencyRegistry,
+            SRC20tokenPriceBCY,
+            fundraiseAmountBCY,
+            acceptedCurrencies,
+            contributionsList,
+            historicalBalance,
+            bufferedContributions
+        );
+
+        return 0;
+    }
+
+    /**
+     *  Loop through all the buffers (four now, but could be many more eventually)
+     *  and turn them into qualified contributions.
+     *
+     *  NOTE: this skips the minAmount checks!
+     *  NOTE: the maxAmount check is still performed
+     *
+     *  @param contributor the address of the contributor we are processing
+     *         buffered contributions for
+     *  @return 0 if all the contributions were accepted, overflow if some were above
+     *          maxAmount and were not added
+     */
+    function _addBufferedContributions(address contributor) internal returns (uint256) {
+        uint256 sum;
+        for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
+            address currency = acceptedCurrencies[i];
+            if(bufferedContributions[contributor][currency] == 0)
+                continue;
+            sum = sum.add(_addContribution(contributor, currency, bufferedContributions[contributor][currency]));
+        }
+        return sum;
+    }
+
+    /**
+     *  Worker function that adds a contribution to the list of contributions
+     *  and updates all the relevant sums and balances
+     *
+     *  @param contributor the address of the contributor
+     *  @param currency the currency of the amount being added
+     *  @param amount the amount being added
+     *  @return 0 if the whole contribution was accepted, the overflow if it was above
+     *          maxAmount and only a part of it was accepted
+     */
+    function _addContribution(
+        address contributor,
+        address currency,
+        uint256 amount
+    )
+        internal
+        returns (uint256)
+    {
+        // convert the coming contribution to BCY
+        uint256 amountBCY = cr.toBCY(amount, currency);
+
+        // get the value in BCY of his previous qualified contributions
+        uint256 previousContributionsBCY = getContributionsBCY(contributor, true);
+
+        // if we are above with previous amount, due to exchange rate fluctuations, return
+        if (previousContributionsBCY >= maxAmountBCY)
+            return amount;
+
+        // get the total with this contribution
+        uint256 contributionsBCY = previousContributionsBCY.add(amountBCY);
+
+        // if we'd cross the maxAmount, take only the portion of the contribution up to the max
+        // we use percentage because we need to cut contribution currency, not BCY
+        uint256 qualifiedAmount = amount;
+        if (contributionsBCY > maxAmountBCY)
+            qualifiedAmount = amount.mul(maxAmountBCY.sub(previousContributionsBCY)).div(amountBCY);
+
+        // get what we are going to take and leave any extra in the buffer
+        bufferedContributions[contributor][currency] = bufferedContributions[contributor][currency]
+            .sub(qualifiedAmount);
+        bufferedSums[currency] = bufferedSums[currency].sub(qualifiedAmount);
+
+        // if this is the first time he's contributing, increase the contributor counter
+        if (contributionsList[contributor].length == 0)
+            numberOfContributors = numberOfContributors.add(1);
+
+        Utils.Contribution memory c;
+        sequence = sequence.add(1);
+        c.currency = currency;
+        c.amount = qualifiedAmount;
+        c.sequence = sequence;
+        c.status = Utils.ContributionStatus.Refundable;
+        contributionsList[contributor].push(c);
+
+        // adjust the global and historical sums
+        qualifiedContributions[contributor][currency] = qualifiedContributions[contributor][currency]
+            .add(qualifiedAmount);
+        qualifiedSums[currency] = qualifiedSums[currency].add(qualifiedAmount);
+        Utils.Balance memory balance;
+        balance.sequence = sequence;
+        balance.balance = qualifiedSums[currency];
+        historicalBalance[currency].push(balance);
+
+        emit ContributionReceived(contributor, qualifiedAmount, sequence, currency);
+        return qualifiedAmount.sub(amount);
+    }
+
+    /**
+     *  Perform all the necessary actions to finish the fundraise
+     *
+     *  @return true on success
+     */
+    function _finishFundraise() internal onlyOwner() returns (uint256) {
+        require(isFinished == false, "Already finished!");
+        require(block.timestamp < endDate.add(expirationTime), "Expiration time passed!");
+        uint256 totalContributionsBCY = Utils.getQualifiedSumsBCY(
+            currencyRegistry,
+            acceptedCurrencies,
+            qualifiedSums
+        );
+        require(totalContributionsBCY >= softCapBCY, "SoftCap not reached!");
+
+        // lock the fundraise amount... it will be somewhere between the soft and hard caps
+        fundraiseAmountBCY = totalContributionsBCY < hardCapBCY ?
+                             totalContributionsBCY : hardCapBCY;
+
+        // Lock the exchange rates between the accepted currencies and BCY
+        // So that claimTokens() calculates correctly whenever called
+        cr.lockExchangeRates();
+
+        // find out the token price
+        SRC20tokenPriceBCY = SRC20tokenPriceBCY > 0 ?
+                             SRC20tokenPriceBCY : fundraiseAmountBCY.div(SRC20tokensToMint);
+
+        isFinished = true;
+
+        return(
+            SRC20tokensToMint > 0 ?
+            SRC20tokensToMint : fundraiseAmountBCY.div(SRC20tokenPriceBCY)
+        );
     }
 
     /**
@@ -526,225 +656,6 @@ contract SwarmPoweredFundraise {
             );
 
         return true;
-    }
-
-    /**
-     *  Allows contributor to get refunds of the amounts he contributed, if
-     *  various conditions are met
-     *
-     *  @return true on success
-     */
-    function getRefund() external returns (bool) {
-        require(
-            isFinished == true || block.timestamp > endDate.add(expirationTime),
-            "Fundraise has not finished!"
-        );
-        require(contributionsLocked == false, "Contributions are locked until expiry!"); // @TODO Maybe unnecessary line
-
-        Utils.getRefund(
-            msg.sender,
-            acceptedCurrencies,
-            contributionsList,
-            qualifiedContributions,
-            bufferedContributions
-        );
-
-        return true;
-    }
-
-    /**
-     *  Perform all the necessary actions to finish the fundraise
-     *
-     *  @return true on success
-     */
-    function _finishFundraise() internal onlyOwner() returns (bool) {
-        require(isFinished == false, "Already finished!");
-        require(block.timestamp < endDate.add(expirationTime), "Expiration time passed!");
-        uint256 totalContributionsBCY = getQualifiedSumsBCY();
-        require(totalContributionsBCY >= softCapBCY, "SoftCap not reached!");
-
-        // lock the fundraise amount... it will be somewhere between the soft and hard caps
-        fundraiseAmountBCY = totalContributionsBCY < hardCapBCY ?
-                             totalContributionsBCY : hardCapBCY;
-
-        // Lock the exchange rates between the accepted currencies and BCY
-        Utils.lockExchangeRates(
-            currencyRegistry,
-            acceptedCurrencies,
-            lockedExchangeRate
-        );
-
-        // find out the token price
-        // @TODO include Presale in this
-        SRC20tokenPriceBCY = SRC20tokenPriceBCY > 0 ?
-                             SRC20tokenPriceBCY : fundraiseAmountBCY / SRC20tokenSupply; // @TODO safe math
-
-        isFinished = true;
-        return true;
-    }
-
-    /**
-     *  Once a contributor has been Whitelisted, this function gets called to
-     *  process his buffered/pending transactions
-     *
-     *  @param contributor the contributor we want to add
-     *  @return true on success
-     */
-    function acceptContributor(
-        address contributor
-    )
-        external
-        ongoing
-        onlyContributorRestrictions
-        returns (bool)
-    {
-        // Check whether the contributor is restricted
-        // require(IContributorRestrictions(contributorRestrictions).isAllowed(contributor)); // @TODO @DEBUG
-
-        // get the value in BCY of his buffered contributions
-        uint256 bufferedContributionsBCY = getBufferedContributionsBCY(contributor);
-
-        // if we are still below the minimum, return
-        if (bufferedContributionsBCY < minAmountBCY)
-            return true;
-
-        // process all the buffers
-        _addBufferedContributions(contributor);
-
-        emit ContributorAccepted(contributor);
-        return true;
-    }
-
-    /**
-     *  Removes a contributor (his contributions)
-     *  This function can only be called by the Token Issuer (fundraise
-     *  contract owner) or by the restrictions/whitelisting contract
-     *  See _removeContributor for more information
-     *
-     *  @param contributor the contributor we want to remove
-     *  @return true on success
-     */
-    function removeContributor(
-        address contributor
-    )
-        external
-        ongoing
-        onlyContributorRestrictions
-        returns (bool)
-    {
-        // make sure he is not on whitelist, if he is he can't be rejected
-        require(
-            !IContributorRestrictions(contributorRestrictions).isAllowed(contributor),
-            "Remove from whitelist first!"
-        );
-
-        Utils.removeContributor(
-            contributor,
-            contributionsList,
-            bufferedContributions,
-            qualifiedContributions
-        );
-        // decrease the global counter of contributors
-        numberOfContributors--;
-
-        // get the value in BCY of his qualified contributions (that we shall give back)
-        uint256 qualifiedContributionsBCY = getQualifiedContributionsBCY(contributor);
-
-        // adjust the caps, which are always in BCY
-        softCapBCY = softCapBCY + qualifiedContributionsBCY;
-        hardCapBCY = hardCapBCY + qualifiedContributionsBCY;
-
-        return true;
-    }
-
-    /**
-     *  Stake and Mint without using ISOP (IssuerStakeOfferPool)
-     *
-     *  NOTE: this function assumes that the Token Issuer has acquired SWM by
-     *  some other means and put them on the account of the Fundraise contract... it
-     *  does not facilitate him using fundraise proceeds to get SWM
-     *
-     *  @return true on success
-     */
-    function stakeAndMint() public returns (bool) {
-
-        uint256 numSRC20Tokens = SRC20tokenSupply > 0 ?
-                                 SRC20tokenSupply : fundraiseAmountBCY / SRC20tokenPriceBCY; //@TODO safe math
-        IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
-
-        _finishFundraise();
-
-        // Withdraw (to the issuer) the ETH and the Tokens
-        _withdrawRaisedFunds();
-        return true;
-    }
-
-    /**
-     *  Stake and Mint using ISOP to get SWM from specific providers
-     *
-     *  @param ISOP address of an ISOP contract
-     *  @param maxMarkup maximum markup the caller is willing to accept
-     *  @return true on success
-     */
-    function stakeAndMint(
-        address ISOP,
-        uint256 maxMarkup
-    )
-        public
-        returns (bool)
-    {
-        // This has all the conditions and will blow up if they are not met
-        // @TODO move below stakeAndMint
-        _finishFundraise();
-        // @TODO investigate: IIssuerStakeOfferPool(ISOP).stakeAndMint(addressList, maxMarkup, swmAmount, ...)
-        // @TODO Update the NAV, but this contract is not allowed to do it...
-        // assetRegistry.updateNetAssetValueUSD(src20, netAssetValueUSD);
-        uint256 netAssetValueUSD = cr.toUSDC(fundraiseAmountBCY, cr.getBaseCurrency());
-        uint256 swmAmount = IGetRateMinter(minter).calcStake(netAssetValueUSD);
-
-        uint256 spentETH;
-        uint256 priceETH;
-
-        // we want ISOP to determine providers
-        priceETH = IIssuerStakeOfferPool(ISOP).loopGetSWMPriceETH(swmAmount, maxMarkup);
-        IIssuerStakeOfferPool(ISOP).loopBuySWMTokens.value(priceETH)(swmAmount, maxMarkup);
-        // @TODO accept all currencies
-
-        // decrease the global ETH balance
-        qualifiedSums[ETH] -= spentETH;
-
-        uint256 numSRC20Tokens = SRC20tokenSupply > 0 ?
-                                 SRC20tokenSupply : fundraiseAmountBCY / SRC20tokenPriceBCY;
-        // Stake and mint
-        IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
-
-        // Withdraw (to the issuer) the ETH and the Tokens
-        _withdrawRaisedFunds();
-        return true;
-    }
-
-    /**
-     *  Allow the caller, if he is eligible, to withdraw his SRC20 tokens once
-     *  they have been minted
-     *
-     *  @return true on success
-     */
-    function claimTokens() external returns (uint256) {
-        // @TODO make this function restartable and return how many tokens are left to claim
-        require(isFinished, "Fundraise has not finished!");
-
-        Utils.claimTokens(
-            src20,
-            currencyRegistry,
-            SRC20tokenPriceBCY,
-            fundraiseAmountBCY,
-            acceptedCurrencies,
-            contributionsList,
-            historicalBalance,
-            bufferedContributions
-        );
-
-        return 0;
     }
 
 }

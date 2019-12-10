@@ -32,6 +32,7 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
   const endDate = moment().unix() + (60 * 60 * 72); // three days from current time;
   const softCapBCY = 1111;
   const hardCapBCY = 5555;
+  const contributionsLocked = false;
 
   beforeEach(async function () {
 
@@ -123,7 +124,8 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager /*authori
       maxAmountBCY,
       this.affiliateManager.address,
       this.contributorRestrictions.address,
-      this.contributionRules.address,
+      //this.contributionRules.address,
+      contributionsLocked,
       {from: owner}
     );
 

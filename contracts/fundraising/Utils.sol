@@ -1,11 +1,14 @@
 pragma solidity ^0.5.0;
 
+import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/ICurrencyRegistry.sol";
 import "../interfaces/ISRC20.sol";
 
 
 library Utils {
+
+    using SafeMath for uint256;
 
     event ContributorWithdrawal(address contributorWallet, address currency, uint256 amount);
     event IssuerWithdrawal(address issuerWallet, address currency, uint256 amount);
@@ -37,23 +40,30 @@ library Utils {
         address contributor,
         address[] storage acceptedCurrencies,
         mapping(address => Contribution[]) storage contributionsList,
+        mapping(address => mapping(address => uint256)) storage qualifiedContributions,
         mapping(address => mapping(address => uint256)) storage bufferedContributions,
-        mapping(address => mapping(address => uint256)) storage qualifiedContributions
+        mapping(address => uint256) storage qualifiedSums,
+        mapping(address => uint256) storage bufferedSums
     )
         external
     {
-        refundETHContributions(
-            contributor,
-            contributionsList,
-            bufferedContributions
-        );
-
-        refundERC20Contributions(
+        _refundETHContributions(
             contributor,
             contributionsList,
             qualifiedContributions,
             bufferedContributions,
-            acceptedCurrencies
+            qualifiedSums,
+            bufferedSums
+        );
+
+        _refundERC20Contributions(
+            contributor,
+            acceptedCurrencies,
+            contributionsList,
+            qualifiedContributions,
+            bufferedContributions,
+            qualifiedSums,
+            bufferedSums
         );
     }
 
@@ -67,33 +77,39 @@ library Utils {
     *                     the ETH for/to
     *  @return true on success
     */
-    function refundETHContributions( // underscore for internal functions
+    function _refundETHContributions( // underscore for internal functions
         address contributor,
         mapping(address => Contribution[]) storage contributionsList,
-        mapping(address => mapping(address => uint256)) storage bufferedContributions
+        mapping(address => mapping(address => uint256)) storage qualifiedContributions,
+        mapping(address => mapping(address => uint256)) storage bufferedContributions,
+        mapping(address => uint256) storage qualifiedSums,
+        mapping(address => uint256) storage bufferedSums
     )
         internal
     {
         uint256 amountWithdrawn;
         for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
-            // @TODO add sums and qualifiedContributions handling !!!!!
             if (contributionsList[contributor][i].currency != address(0))
                 continue;
             if (contributionsList[contributor][i].status != ContributionStatus.Refundable)
                 continue;
-            msg.sender.transfer(contributionsList[contributor][i].amount); // @TODO require()
-            amountWithdrawn += contributionsList[contributor][i].amount; // @TODO safemath
+            msg.sender.transfer(contributionsList[contributor][i].amount);
+            amountWithdrawn = amountWithdrawn.add(contributionsList[contributor][i].amount);
             contributionsList[contributor][i].status = ContributionStatus.Refunded;
         }
-
         delete contributionsList[contributor];
+
+        qualifiedContributions[contributor][address(0)] = qualifiedContributions[contributor][address(0)]
+            .sub(amountWithdrawn);
+        qualifiedSums[address(0)] = qualifiedSums[address(0)].sub(amountWithdrawn);
 
         // withdraw from the buffer too
         uint256 bufferAmount = bufferedContributions[contributor][address(0)];
         if (bufferAmount > 0) {
-            msg.sender.transfer(bufferAmount); // @TODO required
-            amountWithdrawn += bufferAmount;// @TODO safemath
+            msg.sender.transfer(bufferAmount);
+            amountWithdrawn = amountWithdrawn.add(bufferAmount);
             bufferedContributions[contributor][address(0)] = 0;
+            bufferedSums[address(0)] = bufferedSums[address(0)].sub(bufferAmount);
         }
 
         emit ContributorWithdrawal(contributor, address(0), amountWithdrawn);
@@ -108,11 +124,14 @@ library Utils {
      *  @return the amount that was refunded
      */
     function _refundBufferedERC20(
-        address contributor,
-        address[] storage acceptedCurrencies,
-        mapping(address => mapping(address => uint256)) storage bufferedContributions
-        ) internal returns (uint256) {
-        uint256 sum;
+            address contributor,
+            address[] storage acceptedCurrencies,
+            mapping(address => mapping(address => uint256)) storage bufferedContributions,
+            mapping(address => uint256) storage bufferedSums
+        ) 
+            internal 
+            returns (bool) 
+        {
         for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
             address currency = acceptedCurrencies[i];
             uint256 amount = bufferedContributions[contributor][currency];
@@ -122,10 +141,12 @@ library Utils {
                 IERC20(currency).transferFrom(address(this), contributor, amount),
                 "ERC20 transfer failed!"
             );
-            bufferedContributions[contributor][currency] = 0;
-            sum += amount;// @TODO safemath
+            bufferedContributions[contributor][currency] = bufferedContributions[contributor][currency]
+                .sub(amount);
+            bufferedSums[currency] = bufferedSums[currency].sub(amount);
+            emit ContributorWithdrawal(contributor, currency, amount);
         }
-        return sum;
+        return true;
     }
 
     /**
@@ -138,12 +159,14 @@ library Utils {
      *                     the ERC20 tokens/currencies for/to
      *  @return true on success
      */
-    function refundERC20Contributions(
+    function _refundERC20Contributions(
         address contributor,
+        address[] storage acceptedCurrencies,
         mapping(address => Contribution[]) storage contributionsList,
         mapping(address => mapping(address => uint256)) storage qualifiedContributions,
         mapping(address => mapping(address => uint256)) storage bufferedContributions,
-        address[] storage acceptedCurrencies
+        mapping(address => uint256) storage qualifiedSums,
+        mapping(address => uint256) storage bufferedSums
     )
         internal
         returns (bool)
@@ -164,33 +187,23 @@ library Utils {
             );
 
             contributionsList[contributor][i].status = ContributionStatus.Refunded;
-            qualifiedContributions[contributor][currency] = 0;
+            qualifiedContributions[contributor][currency] = qualifiedContributions[contributor][currency]
+                .sub(amount);
+            qualifiedSums[currency] = qualifiedSums[currency].sub(amount);
 
-            amount += _refundBufferedERC20( // @TODO safemath
-                contributor,
-                acceptedCurrencies,
-                bufferedContributions
-            );
             emit ContributorWithdrawal(contributor, currency, amount);
         }
 
         delete contributionsList[contributor];
-        return true;
-    }
 
-    /**
-     *  Helper function for getHistoricalBalance()
-     *
-     *  @param val1 ?
-     *  @param val2 ?
-     *  @param target ?
-     *  @return ?
-     */
-    function _getLower(uint256 val1, uint256 val2, uint256 target) internal pure returns (uint256) {
-        // eliminate warnings
-        uint256 dummy1; dummy1 = val2; // @TODO remove
-        uint256 dummy2; dummy2 = target; // @TODO remove
-        return val1; // @TODO valjda je ovo ok....
+        _refundBufferedERC20(
+            contributor,
+            acceptedCurrencies,
+            bufferedContributions,
+            bufferedSums
+        );
+
+        return true;
     }
 
     /**
@@ -210,15 +223,7 @@ library Utils {
         returns (uint256)
     {
         Balance[] memory arr = historicalBalance[_currency];
-        // if (_currency == zeroAddr) {
-        //     arr = historicalBalanceETH;
-        // } else if (_currency == erc20DAI) {
-        //     arr = historicalBalanceDAI;
-        // } else if (_currency == erc20USDC) {
-        //     arr = historicalBalanceUSDC;
-        // } else if (_currency == erc20WBTC) {
-        //     arr = historicalBalanceWBTC;
-        // }
+
         uint256 l;
         uint256 r = arr.length;
         uint256 mid;
@@ -231,13 +236,15 @@ library Utils {
                 // If target is greater than previous
                 // to mid, return closest of two
                 if (mid > 0 && _sequence > arr[mid - 1].sequence) {
-                    return _getLower(arr[mid - 1].sequence, arr[mid].sequence, _sequence);
+                    // return _getLower(arr[mid - 1].sequence, arr[mid].sequence, _sequence);
+                    return arr[mid - 1].sequence;
                 }
                 /* Repeat for left half */
                 r = mid;
             } else { // If target is greater than mid
                 if (mid < arr.length - 1 && _sequence < arr[mid + 1].sequence) {
-                    return _getLower(arr[mid].sequence, arr[mid + 1].sequence, _sequence);
+                    // return _getLower(arr[mid].sequence, arr[mid + 1].sequence, _sequence);
+                    return arr[mid].sequence;
                 }
                 // update i
                 l = mid + 1;
@@ -252,7 +259,7 @@ library Utils {
      *
      *  @return true on success
      */
-    function withdrawRaisedFunds( // `_`
+    function withdrawRaisedFunds(
         address payable issuerWallet,
         address currencyRegistry,
         address[] storage acceptedCurrencies,
@@ -260,7 +267,7 @@ library Utils {
         uint256 totalIssuerWithdrawalsBCY,
         mapping(address => uint256) storage qualifiedSums
     )
-        internal
+        external
         returns (uint256)
     {
         uint256 totalBCY;
@@ -284,7 +291,7 @@ library Utils {
      *  @param currency the currency of the contributions we want to process
      *  @return true on success
      */
-    function processIssuerWithdrawal( // `_`
+    function processIssuerWithdrawal(
         address payable issuerWallet,
         address currency,
         address currencyRegistry,
@@ -292,23 +299,23 @@ library Utils {
         uint256 fundraiseAmountBCY,
         mapping(address => uint256) storage qualifiedSums
     )
-        internal
+        public
         returns (uint256)
     {
         uint256 amount = qualifiedSums[currency];
         uint256 amountBCY = ICurrencyRegistry(currencyRegistry).toBCY(qualifiedSums[currency], currency);
-        if (totalIssuerWithdrawalsBCY + amountBCY > fundraiseAmountBCY) {
-            amount = qualifiedSums[currency] *
-                     (fundraiseAmountBCY - totalIssuerWithdrawalsBCY) / amountBCY;
+        if (totalIssuerWithdrawalsBCY.add(amountBCY) > fundraiseAmountBCY) {
+            amount = qualifiedSums[currency]
+                     .mul(fundraiseAmountBCY.sub(totalIssuerWithdrawalsBCY)).div(amountBCY);
             amountBCY = ICurrencyRegistry(currencyRegistry).toBCY(amount, currency);
         }
 
-        qualifiedSums[currency] -= amount;
+        qualifiedSums[currency] = qualifiedSums[currency].sub(amount);
 
         if (currency == address(0))
             issuerWallet.transfer(amount);
         else
-            IERC20(currency).transfer(issuerWallet, amount);
+            require(IERC20(currency).transfer(issuerWallet, amount), 'ERC20 transfer failed');
 
         emit IssuerWithdrawal(issuerWallet, currency, amount);
         return amountBCY;
@@ -333,10 +340,10 @@ library Utils {
         uint256 sum;
         for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
             address currency = acceptedCurrencies[i];
-            sum += ICurrencyRegistry(currencyRegistry).toBCY(
+            sum = sum.add(ICurrencyRegistry(currencyRegistry).toBCY(
                 getHistoricalBalance(seq, currency, historicalBalance),
                 currency
-            );
+            ));
         }
         return sum;
     }
@@ -360,8 +367,6 @@ library Utils {
         external
         returns (uint256)
     {
-        // @TODO make this function restartable and return how many tokens are left to claim
-
         // go through a contributor's contributions, sum up those qualified for
         // converting into tokens
         uint256 totalContributorAcceptedBCY = 0;
@@ -385,18 +390,24 @@ library Utils {
                 historicalBalance
             );
             // Whether we take the whole amount...
-            if (historicalBalanceBCY + contributionBCY < fundraiseAmountBCY) { //@TODO safe math
-                totalContributorAcceptedBCY += contributionBCY; //@TODO safe math
+            if (historicalBalanceBCY.add(contributionBCY) < fundraiseAmountBCY) {
+                totalContributorAcceptedBCY = totalContributorAcceptedBCY.add(contributionBCY);
             } else { // ...or just a part of it
-                totalContributorAcceptedBCY += fundraiseAmountBCY - historicalBalanceBCY; //@TODO safe math
-                uint256 refund = historicalBalanceBCY + contributionBCY - fundraiseAmountBCY; //@TODO safe math
-                bufferedContributions[msg.sender][contributionsList[msg.sender][i].currency] += refund; //@TODO safe math
+                totalContributorAcceptedBCY = totalContributorAcceptedBCY
+                    .add(fundraiseAmountBCY.sub(historicalBalanceBCY));
+                uint256 refund = historicalBalanceBCY.add(contributionBCY.sub(fundraiseAmountBCY));
+                bufferedContributions[msg.sender][contributionsList[msg.sender][i].currency] = 
+                bufferedContributions[msg.sender][contributionsList[msg.sender][i].currency].add(refund);
                 break; // we've hit the end, break from the loop
             }
         }
 
-        uint256 tokenAllotment = totalContributorAcceptedBCY / SRC20tokenPriceBCY; //@TODO safe math, AND what happend with funds that are not allocated (/ is cellular division)
-        ISRC20(src20).transfer(msg.sender, tokenAllotment);
+        uint256 tokenAllotment = totalContributorAcceptedBCY.div(SRC20tokenPriceBCY);
+
+        require(
+            ISRC20(src20).transfer(msg.sender, tokenAllotment),
+            'Failed to transfer SRC20!'
+        );
         emit SRC20TokensClaimed(msg.sender, tokenAllotment);
         return 0;
     }
@@ -411,16 +422,43 @@ library Utils {
     function getQualifiedContributionsBCY(
         address contributor,
         address currencyRegistry,
-        address[] storage acceptedCurrencies,
         mapping(address => mapping(address => uint256)) storage qualifiedContributions
     )
-        public
+        external
+        returns (uint256)
+    {
+        uint256 sum;
+        address[] memory acceptedCurrencies = ICurrencyRegistry(currencyRegistry).getAcceptedCurrencies();
+        for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
+            address currency = acceptedCurrencies[i];
+            sum = sum.add(
+                ICurrencyRegistry(currencyRegistry).toBCY(
+                    qualifiedContributions[contributor][currency], currency
+                )
+            );
+        }
+        return sum;
+    }
+
+    /**
+     *  Loop through currencies and get the value (in BCY) of all the
+     *  qualified contributions
+     *
+     *  @return sum of all qualified contributions, in all currencies,
+     *          converted to BCY
+     */
+    function getQualifiedSumsBCY(
+        address currencyRegistry,
+        address[] storage acceptedCurrencies,
+        mapping(address => uint256) storage qualifiedSums
+    ) 
+        public 
         returns (uint256)
     {
         uint256 sum;
         for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
             address currency = acceptedCurrencies[i];
-            sum += ICurrencyRegistry(currencyRegistry).toBCY(qualifiedContributions[contributor][currency], currency);
+            sum = sum.add(ICurrencyRegistry(currencyRegistry).toBCY(qualifiedSums[currency], currency));
         }
         return sum;
     }
@@ -448,37 +486,18 @@ library Utils {
         for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
             address currency = contributionsList[contributor][i].currency;
             uint256 amount = contributionsList[contributor][i].amount;
-            qualifiedContributions[contributor][currency] -= amount;
+            qualifiedContributions[contributor][currency] = qualifiedContributions[contributor][currency]
+                .sub(amount);
             if (contributionsList[contributor][i].status != ContributionStatus.Refundable)
                 continue;
             contributionsList[contributor][i].status = ContributionStatus.Refunded;
-            bufferedContributions[contributor][currency] += amount;
+            bufferedContributions[contributor][currency] = bufferedContributions[contributor][currency]
+                .sub(amount);
         }
 
         // remove his contributions from the queue
         delete(contributionsList[msg.sender]);
         emit ContributorRemoved(contributor);
-
-        return true;
-    }
-
-    /**
-     *  Loop through the accepted currencies and lock the exchange rates
-     *  between each of them and BCY
-     *  @return true on success
-     */
-    function lockExchangeRates(
-        address currencyRegistry,
-        address[] storage acceptedCurrencies,
-        mapping(address => uint256) storage lockedExchangeRate
-    )
-        internal
-        returns (bool)
-    {
-        // @TODO check with business if this logic is acceptable
-        for (uint256 i = 0; i < acceptedCurrencies.length; i++)
-            lockedExchangeRate[acceptedCurrencies[i]] =
-                ICurrencyRegistry(currencyRegistry).toBCY(1, acceptedCurrencies[i]); // @TODO 1 should be multiplied with decimals
 
         return true;
     }
