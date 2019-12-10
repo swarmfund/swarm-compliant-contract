@@ -53,13 +53,6 @@ contract('SwarmPoweredFundraise', async function ([_, whitelistManager, currency
             console.log('i:', i, 'bal expected:', bal, 'bal actual:', balact.toString(), bal == balact);
           }
 
-          //console.log('ACTUAL:');
-
-        // for(let i=0; i<25; i++) {
-        //   let bal = await this.testBinarySearch.getHistoricalBalance(i, currency);
-        //   console.log('i:', i, 'bal:', bal.toString());
-        // }
-
     });
 
   }); // describe

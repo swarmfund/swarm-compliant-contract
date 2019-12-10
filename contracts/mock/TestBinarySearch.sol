@@ -53,14 +53,14 @@ contract TestBinarySearch {
                 // to mid, return closest of two
                 if (mid > 0 && _sequence > arr[mid - 1].sequence) {
                     // return _getLower(arr[mid - 1].sequence, arr[mid].sequence, _sequence);
-                    return arr[mid - 1].sequence;
+                    return arr[mid - 1].balance;
                 }
                 /* Repeat for left half */
                 r = mid;
             } else { // If target is greater than mid
                 if (mid < arr.length - 1 && _sequence < arr[mid + 1].sequence) {
                     // return _getLower(arr[mid].sequence, arr[mid + 1].sequence, _sequence);
-                    return arr[mid].sequence;
+                    return arr[mid].balance;
                 }
                 // update i
                 l = mid + 1;

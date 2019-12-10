@@ -209,20 +209,20 @@ library Utils {
     /**
      *  Return the balance in _currency at the time of the _sequence
      *  @dev using binary search
-     *  @param _sequence the queue position we are looking for
-     *  @param _currency the currency we are looking for
+     *  @param sequence the queue position we are looking for
+     *  @param currency the currency we are looking for
      *  @return the historical balance in _currency at the time of the _sequence
      */
     function getHistoricalBalance(
-        uint256 _sequence,
-        address _currency,
+        uint256 sequence,
+        address currency,
         mapping(address => Balance[]) storage historicalBalance
     )
         public
         view
         returns (uint256)
     {
-        Balance[] memory arr = historicalBalance[_currency];
+        Balance[] memory arr = historicalBalance[currency];
 
         uint256 l;
         uint256 r = arr.length;
@@ -230,21 +230,19 @@ library Utils {
         while (l < r) {
             mid = l + (r - l) / 2;
             // Check if x is present at mid
-            if (arr[mid].sequence == _sequence)
+            if (arr[mid].sequence == sequence)
                 return arr[mid].balance;
-            if (_sequence < arr[mid].sequence) {
+            if (sequence < arr[mid].sequence) {
                 // If target is greater than previous
                 // to mid, return closest of two
-                if (mid > 0 && _sequence > arr[mid - 1].sequence) {
-                    // return _getLower(arr[mid - 1].sequence, arr[mid].sequence, _sequence);
-                    return arr[mid - 1].sequence;
+                if (mid > 0 && sequence > arr[mid - 1].sequence) {
+                    return arr[mid - 1].balance;
                 }
                 /* Repeat for left half */
                 r = mid;
             } else { // If target is greater than mid
-                if (mid < arr.length - 1 && _sequence < arr[mid + 1].sequence) {
-                    // return _getLower(arr[mid].sequence, arr[mid + 1].sequence, _sequence);
-                    return arr[mid].sequence;
+                if (mid < arr.length - 1 && sequence < arr[mid + 1].sequence) {
+                    return arr[mid].balance;
                 }
                 // update i
                 l = mid + 1;
@@ -252,37 +250,6 @@ library Utils {
         }
         return arr[mid].balance;
     }
-
-    // /**
-    //  *  Loop through the accepted currencies and initiate a withdrawal for
-    //  *  each currency, sending the funds to the Token Issuer
-    //  *
-    //  *  @return true on success
-    //  */
-    // function withdrawRaisedFunds(
-    //     address payable issuerWallet,
-    //     address currencyRegistry,
-    //     address[] storage acceptedCurrencies,
-    //     uint256 fundraiseAmountBCY,
-    //     uint256 totalIssuerWithdrawalsBCY,
-    //     mapping(address => uint256) storage qualifiedSums
-    // )
-    //     external
-    //     returns (uint256)
-    // {
-    //     uint256 totalBCY;
-    //     for (uint256 i = 0; i < acceptedCurrencies.length; i++)
-    //         totalBCY += processIssuerWithdrawal(
-    //             issuerWallet,
-    //             acceptedCurrencies[i],
-    //             currencyRegistry,
-    //             totalIssuerWithdrawalsBCY,
-    //             fundraiseAmountBCY,
-    //             qualifiedSums
-    //         );
-
-    //     return totalBCY;
-    // }
 
     /**
      *  Process a single currency withdrawal by the Issuer, making sure not more
