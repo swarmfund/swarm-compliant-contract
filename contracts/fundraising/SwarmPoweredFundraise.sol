@@ -441,7 +441,9 @@ contract SwarmPoweredFundraise {
      *  If ISOP parameter is address(0), SWM has to be on the fundraise contract
      *
      *  @param ISOP address of an ISOP contract
-     *  @param maxMarkup maximum markup the caller is willing to accept
+     *  @param maxMarkup maximum markup the caller is willing to accept. To determine
+     *                   the correct format, see IssuerStakeOfferPool.markupPrecision
+     *                   If markupPrecision is 1000, to pass 5%, pass 5000
      *  @return true on success
      */
     function stakeAndMint(
@@ -464,7 +466,6 @@ contract SwarmPoweredFundraise {
         }
 
         // Using ISOP...
-        // @TODO investigate: IIssuerStakeOfferPool(ISOP).stakeAndMint()
         // NOTE: one day, rework to accept all currencies, not just ETH
         uint256 netAssetValueUSD = cr.toUSD(fundraiseAmountBCY, cr.getBaseCurrency());
         uint256 swmAmount = IGetRateMinter(minter).calcStake(netAssetValueUSD);

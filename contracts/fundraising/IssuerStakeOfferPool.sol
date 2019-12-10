@@ -19,24 +19,23 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
     using SafeMath for uint256;
 
     // Setup variables that don't change
-
-    address public src20Registry; // @TODO check why we need this -
-                                  // Answer: The idea was to do stakeAndMint here, we can discuss later
     uint256 public minTokens;
     uint256 public maxMarkup;
     uint256 public maxProviderCount;
-
     address public swarmERC20;
     address public uniswapUSDC;
     address public swmPriceOracle;
 
     // State variables that can change
-
     address public head;
+
+    // Constant
+    uint256 internal markupPrecision = 1000; // support resolution of 1/1000 of a percent
 
     struct Provider {
         uint256 tokens;
-        uint256 markup;
+        uint256 markup; // Formatting note: see markupPrecision
+                        // If it is 1000 and you want 12.554% markup, pass 12554 to the variable
         address previous;
         address next;
     }
@@ -74,7 +73,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         _addToList(msg.sender, markup);
 
         if(providerList[msg.sender].tokens == 0)
-            providerCount++;
+            providerCount.add(1);
 
         providerList[msg.sender].tokens = swmAmount;
         providerList[msg.sender].markup = markup;
@@ -83,7 +82,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
     }
 
     // Add an element to the sorted (ascending) linked list of elements
-    function _addToList(address provider, uint256 _markup) internal returns (bool) {
+    function _addToList(address provider, uint256 markup) internal returns (bool) {
 
         // If we don't have any elements set it up as the first one
         if (head == address(0)) {
@@ -91,8 +90,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
             return true;
         }
 
-
-        if (providerList[head].markup >= _markup) {
+        if (providerList[head].markup >= markup) {
             if (providerList[provider].next != address(0) || providerList[provider].previous != address(0)) {
                 providerList[providerList[provider].previous].next = providerList[provider].next;
             }
@@ -102,7 +100,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
             head = provider;
         } else {
             address current = head;
-            while (providerList[current].next != address(0) && providerList[providerList[current].next].markup < _markup) {
+            while (providerList[current].next != address(0) && providerList[providerList[current].next].markup < markup) {
                 current = providerList[current].next;
             }
 
@@ -122,7 +120,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
             }
         }
 
-        //            // If we have at least one element, loop through the list, add new element to correct place
+        //        // If we have at least one element, loop through the list, add new element to correct place
         //        address i = head;
         //        while(i != address(0)) {
         //
@@ -169,18 +167,17 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
     function unRegister() external returns (bool) {
         _removeFromList(msg.sender);
 
-        providerCount--;
+        providerCount.sub(1);
         return true;
     }
 
     function unRegister(address provider) external onlyOwner returns (bool) {
         _removeFromList(provider);
 
-        providerCount--;
+        providerCount.sub(1);
         return true;
     }
 
-    // Should this apply retroactively, with a loop?
     function updateMinTokens(uint256 _minTokens) external onlyOwner {
         minTokens = _minTokens;
     }
@@ -198,103 +195,97 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
     // Get the market price of SWM and apply the account's markup
     function getSWMPriceETH(address account, uint256 numSWM) public returns (uint256) {
         (uint256 swmPriceUSDnumerator, uint256 swmPriceUSDdenominator) = IPriceUSD(swmPriceOracle).getPrice();
-        uint256 requiredUSD = numSWM * swmPriceUSDnumerator / swmPriceUSDdenominator;
+        uint256 requiredUSD = numSWM.mul(swmPriceUSDnumerator).div(swmPriceUSDdenominator);
         uint256 requiredETH = IUniswap(uniswapUSDC).getEthToTokenOutputPrice(requiredUSD);
-        return requiredETH * providerList[account].markup;
-        // @TODO their need to be some kind of precisions
+        return requiredETH.mul(providerList[account].markup).div(markupPrecision*100);
     }
 
     // Loop to find out how much ETH we have to spend
     function loopGetSWMPriceETH(
-        uint256 _swmAmount,
-        uint256 _maxMarkup
+        uint256 swmAmount,
+        uint256 callerMaxMarkup
     )
         public
         returns (uint256)
     {
         uint256 tokens;
-        uint256 priceETH;
+        uint256 tokensValueETH;
         uint256 tokensCollected;
         address i = head;
         while (i != address(0)) {
             // If this one is too expensive, skip to the next
-            if (providerList[i].markup > _maxMarkup)
-                i = providerList[i].next;
-
-            // Take all his tokens, or only a part of them
-            tokens = _swmAmount - tokensCollected >= providerList[i].tokens ?
-                     providerList[i].tokens : _swmAmount - tokensCollected;
-
-            tokensCollected += tokens;
-            priceETH += getSWMPriceETH(i, tokens);
-        }
-
-        require(
-            tokensCollected == _swmAmount, 
-            'Not enough SWM on the ISOP contract match your criteria!'
-        );
-
-        return priceETH;
-    }
-
-    // Loop through the linked list of providers, buy SWM tokens from them until we have enough
-    function loopBuySWMTokens(
-        uint256 numSWM,
-        uint256 _maxMarkup
-    )
-        public
-        payable
-        returns (bool)
-    {
-        // Convert figures
-        // NOTE: we don't have a real market here, but a type of a bonding curve
-        (uint256 swmPriceUSDnumerator, uint256 swmPriceUSDdenominator) = IPriceUSD(swmPriceOracle).getPrice();
-        uint256 requiredUSD = numSWM * swmPriceUSDnumerator / swmPriceUSDdenominator;
-
-        uint256 receivedUSD = IUniswap(uniswapUSDC).getTokenToEthOutputPrice(msg.value);
-        require(receivedUSD >= requiredUSD, 'Purchase failed: send more ETH!');
-
-        // loop and collect tokens
-        uint256 tokens;
-        uint256 tokensCollected;
-        uint256 tokenValueUSD;
-        uint256 tokenValueETH;
-        address i = head;
-
-        while (i != address(0)) {
-
-            // If this one is too expensive, skip to the next
-            if (providerList[i].markup > _maxMarkup) {
+            if (providerList[i].markup > callerMaxMarkup) {
                 i = providerList[i].next;
                 continue;
             }
 
             // Take all his tokens, or only a part of them
-            tokens = numSWM - tokensCollected >= providerList[i].tokens ?
-                     providerList[i].tokens : numSWM - tokensCollected;
+            tokens = swmAmount.sub(tokensCollected) >= providerList[i].tokens ?
+                     providerList[i].tokens : swmAmount.sub(tokensCollected);
 
-            tokensCollected = tokensCollected + tokens;
-
-            tokenValueUSD = tokens * swmPriceUSDnumerator / swmPriceUSDdenominator;
-            tokenValueETH = IUniswap(uniswapUSDC).getTokenToEthInputPrice(tokenValueUSD);
-
-            IERC20(swarmERC20).transfer(msg.sender, tokens);
-            address(uint160(i)).transfer(tokenValueETH);
-
+            tokensCollected = tokensCollected.add(tokens);
+            tokensValueETH = tokensValueETH.add(getSWMPriceETH(i, tokens));
             i = providerList[i].next;
+        }
 
-            // this needs to be after so we dont delete .next;
-            providerList[i].tokens = providerList[i].tokens - tokens;
+        require(
+            tokensCollected == swmAmount, 
+            'Not enough SWM on the ISOP contract match your criteria!'
+        );
+        return tokensValueETH;
+    }
+
+    // Loop through the linked list of providers, buy SWM tokens from them until we have enough
+    // NOTE: this function needs to be called with a sufficient number of ETH forwarded to it
+    //       to find out how many, loopGetSWMPriceETH() is called first
+    function loopBuySWMTokens(
+        uint256 swmAmount,
+        uint256 callerMaxMarkup
+    )
+        public
+        payable
+        returns (bool)
+    {
+        uint256 tokens;
+        uint256 tokensCollected;
+        uint256 tokensValueETH;
+        address i = head;
+        while (i != address(0)) {
+
+            // If this one is too expensive, skip to the next
+            if (providerList[i].markup > callerMaxMarkup) {
+                i = providerList[i].next;
+                continue;
+            }
+
+            // Take all his tokens, or only a part of them
+            tokens = swmAmount.sub(tokensCollected) >= providerList[i].tokens ?
+                     providerList[i].tokens : swmAmount.sub(tokensCollected);
+
+            tokensValueETH = getSWMPriceETH(i, tokens);
+
+            require(IERC20(swarmERC20).transfer(msg.sender, tokens), 'SWM transfer failed!');
+            address(uint160(i)).transfer(tokensValueETH); // will blow up if insufficient funds
+
+            tokensCollected = tokensCollected.add(tokens);
+            // we need a temp variable because in the next step we delete 
+            // the struct providerList[i]
+            address next = providerList[i].next;
+
+            providerList[i].tokens = providerList[i].tokens.sub(tokens);
             if (providerList[i].tokens == 0) {
                 _removeFromList(i);
-                providerCount--;
+                providerCount.sub(1);
             }
+
+            i = next;
         }
 
         return true;
     }
 
     // Get tokens from one specific account
+    // NOTE: this is not used
     function buySWMTokens(
         address account,
         uint256 numSWM
@@ -314,9 +305,7 @@ contract IssuerStakeOfferPool is IIssuerStakeOfferPool, Ownable {
         // Not the same as on a deep market
         uint256 receivedUSD = IUniswap(uniswapUSDC).getTokenToEthOutputPrice(msg.value);
 
-        uint256 markup = receivedUSD / requiredUSD * 100;
-        // @TODO 100 is precision, move to variable.
-
+        uint256 markup = receivedUSD.div(requiredUSD).mul(markupPrecision*100);
         require(markup >= providerList[account].markup, 'Purchase failed: offered price too low!');
 
         require(IERC20(swarmERC20).transfer(msg.sender, numSWM), "Purchase failed: SWM token transfer failed!");
