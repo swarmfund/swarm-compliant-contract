@@ -21,8 +21,8 @@ contract('GetRateMinter', function ([_, owner, account0, account1, account2, acc
   const SRC20_DECIMALS = new BN(8); // test with decimals diff
   const SWM_DECIMALS = new BN(18);
   const maxSrcTotalSupply = new BN(10000000000).mul(new BN(10).pow(SRC20_DECIMALS));
-  const SWM_PRICE_USD_NUMERATOR = 5
-  const SWM_PRICE_USD_DENOMINATOR = 100
+  const SWM_PRICE_USD_NUMERATOR = 5;
+  const SWM_PRICE_USD_DENOMINATOR = 100;
   const NAV = 1000;
 
   beforeEach(async function () {
