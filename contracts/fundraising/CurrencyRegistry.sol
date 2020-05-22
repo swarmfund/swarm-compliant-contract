@@ -1,8 +1,8 @@
 pragma solidity ^0.5.0;
 
-import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v2.5.0/contracts/math/SafeMath.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v2.5.0/contracts/token/ERC20/IERC20.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v2.5.0/contracts/ownership/Ownable.sol";
 
 import "../interfaces/IExchange.sol";
 
@@ -57,9 +57,13 @@ contract CurrencyRegistry is Ownable {
         return true;
     }
 
-    function isAccepted(address currency) public view returns (bool) {
-        for (uint256 i = 0; i < currenciesList.length; i++) {
-            if (currency == currenciesList[i].erc20address) {
+    function isAccepted(address currency) public view returns (bool) 
+    {
+        
+        uint256 curListLen = currenciesList.length;
+        for (uint256 i = 0; i < curListLen; i++) 
+        {
+           if (currency == currenciesList[i].erc20address) {
                 return true;
             }
         }
@@ -67,6 +71,7 @@ contract CurrencyRegistry is Ownable {
     }
 
     function addCurrency(address erc20address, address exchangeProxy) external onlyOwner() returns (bool) {
+        require(isAccepted(erc20address) != true, "currency already exists");
         CurrencyStats memory c;
         c.erc20address = erc20address;
         c.exchangeProxy = exchangeProxy;
@@ -87,70 +92,26 @@ contract CurrencyRegistry is Ownable {
 
     function getAcceptedCurrencies() external view returns (address[] memory) {
         address[] memory currencies = new address[](currenciesList.length);
-        for (uint256 i = 0; i < currenciesList.length; i++) {
+        uint256 curListLen = currenciesList.length;
+        for (uint256 i = 0; i < curListLen; i++) {
             currencies[i] = (currenciesList[i].erc20address);
         }
         return currencies;
     }
 
-    function toUSD(
-        uint256 amount,
-        address currencyFrom
-    //uint256 decimals
-    )
-    external
-        //returns (uint256 outAmount, uint256 outDecimals)
-    returns (uint256 outAmount)
+    function toUSD(uint256 amount,address currencyFrom)external view returns (uint256 outAmount)
     {
-        (uint256 rAmount,) =
-        IExchange(currenciesList[currencyIndex[currencyFrom]].exchangeProxy).getRate(
-            currencyFrom,
-            USDERC20,
-            amount,
-            0
-        //decimals
-        );
-        return rAmount;
+        return IExchange(currenciesList[currencyIndex[currencyFrom]].exchangeProxy).getRate(currencyFrom, USDERC20, amount);
     }
 
-    function toBCY(
-        uint256 amount,
-        address currencyFrom
-    //, uint256 decimals
-    )
-    public
-        // returns (uint256 outAmount, uint256 outDecimals)
-    returns (uint256 outAmount)
+    function toBCY(uint256 amount, address currencyFrom) public returns (uint256 outAmount)
     {
-        uint256 rAmount;
-
-        (rAmount,) =
-        IExchange(currenciesList[currencyIndex[currencyFrom]].exchangeProxy).getRate(
-            currencyFrom,
-            baseCurrency,
-            amount,
-            0
-        //decimals
-        );
-
-        return rAmount;
+        return IExchange(currenciesList[currencyIndex[currencyFrom]].exchangeProxy).getRate(currencyFrom, baseCurrency, amount);
     }
 
-    function getRate(
-        address currencyFrom,
-        address currencyTo,
-        uint256 amount,
-        uint256 decimals
-    )
-    external
-    returns (uint256, uint256)
+    function getRate(address currencyFrom, address currencyTo, uint256 amount) external view returns (uint256)
     {
-        return IExchange(currenciesList[currencyIndex[currencyFrom]].exchangeProxy).getRate(
-            currencyFrom,
-            currencyTo,
-            amount,
-            decimals
-        );
+        return IExchange(currenciesList[currencyIndex[currencyFrom]].exchangeProxy).getRate(currencyFrom, currencyTo, amount);
     }
 
     /**
@@ -162,9 +123,27 @@ contract CurrencyRegistry is Ownable {
         external
         returns (bool)
     {
-        for (uint256 i = 0; i < currenciesList.length; i++)
-            lockedExchangeRate[currenciesList[i].erc20address] =
+        uint256 curListLen  = currenciesList.length;
+        address DAIaddress  = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+        address USDCaddress = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+        address WBTCaddress = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
+
+        for (uint256 i = 0; i < curListLen; i++)
+        {
+            if (currenciesList[i].erc20address == DAIaddress)
+                lockedExchangeRate[currenciesList[i].erc20address] =
                 toBCY(10**18, currenciesList[i].erc20address);
+            else if (currenciesList[i].erc20address == USDCaddress)
+                lockedExchangeRate[currenciesList[i].erc20address] =
+                toBCY(10**6, currenciesList[i].erc20address);
+            else if (currenciesList[i].erc20address == WBTCaddress)
+                lockedExchangeRate[currenciesList[i].erc20address] =
+                toBCY(10**8, currenciesList[i].erc20address);
+	    else if (currenciesList[i].erc20address == ETH)
+                lockedExchangeRate[currenciesList[i].erc20address] =
+                toBCY(10**18, currenciesList[i].erc20address);
+            
+        }
 
         return true;
     }

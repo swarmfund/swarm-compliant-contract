@@ -11,10 +11,9 @@ interface IExchange {
     function getRate(
         address currencyFrom, 
         address currencyTo, 
-        uint256 amount, 
-        uint256 decimals
+        uint256 amount 
     )
-        external
-        returns (uint256 outAmount, uint256 outDecimals);
+        external view
+        returns (uint256 outAmount);
 
 }

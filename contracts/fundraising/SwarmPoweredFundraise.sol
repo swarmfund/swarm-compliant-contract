@@ -1,7 +1,9 @@
 pragma solidity ^0.5.0;
 
-import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v2.5.0/contracts/math/SafeMath.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v2.5.0/contracts/token/ERC20/IERC20.sol";
+
+
 
 import "../interfaces/IGetRateMinter.sol";
 import "../interfaces/IAffiliateManager.sol";
@@ -49,10 +51,10 @@ contract SwarmPoweredFundraise {
     uint256 public fundraiseAmountBCY;
     uint256 public numberOfContributors;
     uint256 public totalIssuerWithdrawalsBCY;
-    address payable issuerWallet;
-    bool public isFinished; // default == false;
-    bool public setupCompleted; // default == false
+    bool public isFinished = false; // default == false;
+    bool public setupCompleted = false; // default == false
     bool public contributionsLocked = true;
+    bool public isCancelled; // default == false;
 
     // per contributor, iterable list of his contributions, where each contribution
     // holds information about its position in the global queue of contributions
@@ -109,6 +111,7 @@ contract SwarmPoweredFundraise {
         require(isFinished == false, "Fundraise has finished!");
         require(block.timestamp >= startDate, "Fundraise has not started yet!");
         require(block.timestamp <= endDate, "Fundraise has ended");
+        return true;
     }
 
     /**
@@ -128,6 +131,8 @@ contract SwarmPoweredFundraise {
     )
     public
     {
+	require(_hardCapBCY >= _softCapBCY, "Hardcap has to be >= Softcap");
+
         owner = msg.sender;
         label = _label;
         src20 = _src20;
@@ -151,28 +156,37 @@ contract SwarmPoweredFundraise {
             isFinished == false || msg.sender == owner,
             "Only owner can send ETH if fundraise has finished!"
         );
-        _contribute(msg.sender, ETH, msg.value, "");
+        _contribute(msg.sender, ETH, msg.value);
     }
 
     /**
      *  Set up additional parameters that didn't fit in the constructor
      *  All variables cannot be in the constructor because we get "stack too deep" error
+     *  NOTE : If SRC20tokenPriceBCY is not zero, SRC20tokensToMint is ignored
      */
     function setupContract(
+        uint256 _SRC20tokenPriceBCY,
         uint256 _minAmountBCY,
         uint256 _maxAmountBCY,
         address _affiliateManager,
         address _contributorRestrictions,
+	address _minter,
         bool _contributionsLocked
     )
     external
     onlyOwner()
     {
+	require(_minAmountBCY >= _SRC20tokenPriceBCY, "Minimum amount has to be >= SRC20 token price");
+	require(_maxAmountBCY >= _minAmountBCY, "Maximum amount has to be >= minAmountBCY");
+	require( (_SRC20tokenPriceBCY > 0) || (SRC20tokensToMint > 0), "Either of Token price or Tokens to mint is needed");
+
+        SRC20tokenPriceBCY = _SRC20tokenPriceBCY;
         minAmountBCY = _minAmountBCY;
         maxAmountBCY = _maxAmountBCY;
         affiliateManager = _affiliateManager;
         contributorRestrictions = _contributorRestrictions;
         contributionsLocked = _contributionsLocked;
+	minter = _minter;
         setupCompleted = true;
     }
 
@@ -183,7 +197,7 @@ contract SwarmPoweredFundraise {
      *  @return true on success
      */
     function cancelFundraise() external onlyOwner() returns (bool) {
-        isFinished = true;
+        isCancelled = true;
         return true;
     }
 
@@ -197,7 +211,8 @@ contract SwarmPoweredFundraise {
      */
     function getContributionsBCY(address contributor, bool qualified) public returns (uint256) {
         uint256 sum;
-        for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
+	uint256 accpCurLen = acceptedCurrencies.length;
+        for (uint256 i = 0; i < accpCurLen; i++) {
             address currency = acceptedCurrencies[i];
             sum = sum.add(
                 cr.toBCY(
@@ -281,7 +296,21 @@ contract SwarmPoweredFundraise {
             "ERC20 transfer failed!"
         );
 
-        _contribute(msg.sender, erc20, amount, affiliateLink);
+        _contribute(msg.sender, erc20, amount);
+
+        if (bytes(affiliateLink).length > 0) {
+	    uint256 affiliateTokens = 0;
+            // send the reward to referee's buffer
+            (address affiliate, uint256 percentage) =
+                IAffiliateManager(affiliateManager).getAffiliate(affiliateLink);
+            affiliateTokens = ((amount.mul(percentage)).div(100));
+            bufferedContributions[affiliate][erc20] = bufferedContributions[affiliate][erc20]
+                .add(affiliateTokens);
+            // adjust the amount
+            amount = amount.sub(affiliateTokens);
+
+        }
+
         return true;
     }
 
@@ -291,28 +320,18 @@ contract SwarmPoweredFundraise {
      *  @param contributor the address of the contributor
      *  @param currency the currency of the contribution
      *  @param amount the amount of the contribution
-     *  @param affiliateLink (optional) affiliate link used
+     *  
      *  @return true on success
      */
     function _contribute(
         address contributor,
         address currency,
-        uint256 amount,
-        string memory affiliateLink
+        uint256 amount
     )
         internal
         onlyAcceptedCurrencies(currency)
         returns (bool)
     {
-        if (bytes(affiliateLink).length > 0) {
-            // send the reward to referee's buffer
-            (address affiliate, uint256 percentage) =
-                IAffiliateManager(affiliateManager).getAffiliate(affiliateLink);
-            bufferedContributions[affiliate][currency] = bufferedContributions[affiliate][currency]
-                .add(amount.mul(percentage));
-            // adjust the amount
-            amount = amount.sub(amount.mul(percentage));
-        }
 
         // add the contribution to the buffer
         bufferedContributions[contributor][currency] = bufferedContributions[contributor][currency]
@@ -353,7 +372,7 @@ contract SwarmPoweredFundraise {
      */
     function getRefund() external returns (bool) {
         require(
-            isFinished == true ||
+            isCancelled == true ||
             block.timestamp > endDate.add(expirationTime) ||
             contributionsLocked == false,
             "Fundraise has not finished!"
@@ -447,6 +466,7 @@ contract SwarmPoweredFundraise {
      *  @return true on success
      */
     function stakeAndMint(
+        address payable issuerWallet,
         address ISOP,
         uint256 maxMarkup
     )
@@ -461,7 +481,7 @@ contract SwarmPoweredFundraise {
         if(ISOP == address(0)) {
             IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
             // Withdraw (to the issuer) the ETH and the Tokens
-            _withdrawRaisedFunds();
+            _withdrawRaisedFunds(issuerWallet);
             return true;
         }
 
@@ -479,7 +499,7 @@ contract SwarmPoweredFundraise {
         IGetRateMinter(minter).stakeAndMint(src20, numSRC20Tokens);
 
         // Withdraw (to the issuer) the ETH and the Tokens
-        _withdrawRaisedFunds();
+        _withdrawRaisedFunds(issuerWallet);
         return true;
     }
 
@@ -488,7 +508,7 @@ contract SwarmPoweredFundraise {
      *  they have been minted
      *
      *  @return true on success
-     */
+     
     function claimTokens() external returns (uint256) {
 
         require(isFinished, "Fundraise has not finished!");
@@ -507,6 +527,9 @@ contract SwarmPoweredFundraise {
         return 0;
     }
 
+    */
+
+
     /**
      *  Loop through all the buffers (four now, but could be many more eventually)
      *  and turn them into qualified contributions.
@@ -521,7 +544,8 @@ contract SwarmPoweredFundraise {
      */
     function _addBufferedContributions(address contributor) internal returns (uint256) {
         uint256 sum;
-        for (uint256 i = 0; i < acceptedCurrencies.length; i++) {
+	uint256 accpCurLen = acceptedCurrencies.length;
+        for (uint256 i = 0; i < accpCurLen; i++) {
             address currency = acceptedCurrencies[i];
             if(bufferedContributions[contributor][currency] == 0)
                 continue;
@@ -550,6 +574,7 @@ contract SwarmPoweredFundraise {
     {
         // convert the coming contribution to BCY
         uint256 amountBCY = cr.toBCY(amount, currency);
+        require(amountBCY>0, "AMOUNT IS 0");
 
         // get the value in BCY of his previous qualified contributions
         uint256 previousContributionsBCY = getContributionsBCY(contributor, true);
@@ -619,17 +644,20 @@ contract SwarmPoweredFundraise {
         // Lock the exchange rates between the accepted currencies and BCY
         // so that claimTokens() calculates correctly whenever called
         cr.lockExchangeRates();
-
-        // find out the token price
-        SRC20tokenPriceBCY = SRC20tokenPriceBCY > 0 ?
-                             SRC20tokenPriceBCY : fundraiseAmountBCY.div(SRC20tokensToMint);
-
+   	
         isFinished = true;
 
-        return(
-            SRC20tokensToMint > 0 ?
-            SRC20tokensToMint : fundraiseAmountBCY.div(SRC20tokenPriceBCY)
-        );
+        // find out the token price
+        if (SRC20tokenPriceBCY > 0) 
+		return fundraiseAmountBCY.div(SRC20tokenPriceBCY);	
+	else {
+
+		SRC20tokenPriceBCY = fundraiseAmountBCY.div(SRC20tokensToMint);		
+                return SRC20tokensToMint;
+        }
+       
+
+        
     }
 
     /**
@@ -638,9 +666,10 @@ contract SwarmPoweredFundraise {
      *
      *  @return true on success
      */
-    function _withdrawRaisedFunds() internal returns (bool) {
+    function _withdrawRaisedFunds(address payable issuerWallet) internal returns (bool) {
 
-        for (uint256 i = 0; i < acceptedCurrencies.length; i++)
+	uint256 accpCurLen = acceptedCurrencies.length;
+        for (uint256 i = 0; i < accpCurLen; i++)
             totalIssuerWithdrawalsBCY = Utils.processIssuerWithdrawal(
                 issuerWallet,
                 acceptedCurrencies[i],

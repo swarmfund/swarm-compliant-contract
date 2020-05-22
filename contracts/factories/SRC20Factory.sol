@@ -12,6 +12,7 @@ contract SRC20Factory {
     ISRC20Registry private _registry;
 
     event SRC20Created(address token);
+    address public token;
 
     /**
      * @dev Factory constructor expects SRC20 tokens registry.
@@ -50,7 +51,7 @@ contract SRC20Factory {
     )
         public returns (bool)
     {
-        address token = address(new SRC20(
+         token = address(new SRC20(
             name,
             symbol,
             decimals,

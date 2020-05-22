@@ -3,7 +3,7 @@ pragma solidity ^0.5.0;
 import "../interfaces/ISRC20Roles.sol";
 import "./SRC20.sol";
 import "../interfaces/IAssetRegistry.sol";
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v2.5.0/contracts/ownership/Ownable.sol";
 
 /**
  * AssetRegistry holds the real-world/offchain properties of the various Assets being tokenized.

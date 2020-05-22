@@ -37,18 +37,6 @@ contract ContributorRestrictions is IContributorRestrictions, ContributorWhiteli
         maxContributors = maxNumContributors;
     }
 
-    function isAllowed(address account) external view returns (bool) {
-        if(
-            _whitelisted[account] &&
-            maxContributors == 0 ?
-                true :
-                SwarmPoweredFundraise(fundraise).numberOfContributors() < maxContributors
-            )
-            return true;
-        else
-            return false;
-    }
-
     function checkRestrictions(address account) external view returns (bool) {
         require(_whitelisted[account], "Account not on whitelist!");
         require(
@@ -79,14 +67,16 @@ contract ContributorRestrictions is IContributorRestrictions, ContributorWhiteli
     }
 
     function bulkWhitelistAccount(address[] calldata accounts) external onlyAuthorised {
-        for (uint256 i = 0; i < accounts.length ; i++) {
+	uint256 accLen = accounts.length;
+        for (uint256 i = 0; i < accLen ; i++) {
             _whitelisted[accounts[i]] = true;
             emit AccountWhitelisted(accounts[i], msg.sender);
         }
     }
 
     function bulkUnWhitelistAccount(address[] calldata accounts) external onlyAuthorised {
-        for (uint256 i = 0; i < accounts.length ; i++) {
+	uint256 accLen = accounts.length;
+        for (uint256 i = 0; i < accLen ; i++) {
             delete _whitelisted[accounts[i]];
             emit AccountUnWhitelisted(accounts[i], msg.sender);
         }

@@ -1,6 +1,6 @@
 pragma solidity ^0.5.0;
 
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v2.5.0/contracts/ownership/Ownable.sol";
 import "../roles/DelegateRole.sol";
 
 /**
@@ -16,8 +16,8 @@ contract AffiliateManager is Ownable, DelegateRole {
         uint256 percentage;
     }
 
-    mapping(string => address) public affiliateLinks;
-    mapping(address => Affiliate) public affiliates;
+    mapping(string => address) private affiliateLinks;
+    mapping(address => Affiliate) private affiliates;
 
     /**
      *  Set up an Affiliate. Can be done by the Token Issuer at any time
@@ -35,6 +35,8 @@ contract AffiliateManager is Ownable, DelegateRole {
         onlyOwner()
         returns (bool)
     {
+        require( percentage <= 100, "Percentage greater than 100 not allowed");
+        require( percentage > 0, "Percentage has to be  greater than 0");
         affiliates[affiliate].affiliateLink = affiliateLink;
         affiliates[affiliate].percentage = percentage;
         affiliateLinks[affiliateLink] = affiliate;
@@ -56,7 +58,8 @@ contract AffiliateManager is Ownable, DelegateRole {
         onlyOwner()
         returns (bool)
     {
-        affiliateLinks[affiliates[affiliate].affiliateLink] = address(0);
+        require( affiliates[affiliate].percentage != 0, "Affiliate not exist");
+        affiliateLinks[affiliates[affiliate].affiliateLink] = address(0x0);
         delete(affiliates[affiliate]);
         return true;
     }

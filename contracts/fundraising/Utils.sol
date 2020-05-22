@@ -1,7 +1,7 @@
 pragma solidity ^0.5.0;
 
-import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v2.5.0/contracts/math/SafeMath.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v2.5.0/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/ICurrencyRegistry.sol";
 import "../interfaces/ISRC20.sol";
 
@@ -65,6 +65,8 @@ library Utils {
             qualifiedSums,
             bufferedSums
         );
+
+        delete contributionsList[contributor];
     }
 
     /**
@@ -87,7 +89,7 @@ library Utils {
     )
         internal
     {
-        uint256 amountWithdrawn;
+        uint256 amountWithdrawn = 0;
         for (uint256 i = 0; i < contributionsList[contributor].length; i++) {
             if (contributionsList[contributor][i].currency != address(0))
                 continue;
@@ -97,11 +99,12 @@ library Utils {
             amountWithdrawn = amountWithdrawn.add(contributionsList[contributor][i].amount);
             contributionsList[contributor][i].status = ContributionStatus.Refunded;
         }
-        delete contributionsList[contributor];
 
-        qualifiedContributions[contributor][address(0)] = qualifiedContributions[contributor][address(0)]
-            .sub(amountWithdrawn);
-        qualifiedSums[address(0)] = qualifiedSums[address(0)].sub(amountWithdrawn);
+	if (amountWithdrawn > 0) {
+        	qualifiedContributions[contributor][address(0)] = qualifiedContributions[contributor][address(0)]
+            		.sub(amountWithdrawn);
+        	qualifiedSums[address(0)] = qualifiedSums[address(0)].sub(amountWithdrawn);
+	}
 
         // withdraw from the buffer too
         uint256 bufferAmount = bufferedContributions[contributor][address(0)];
@@ -138,7 +141,7 @@ library Utils {
             if (amount == 0)
                 continue;
             require(
-                IERC20(currency).transferFrom(address(this), contributor, amount),
+                IERC20(currency).transfer(contributor, amount),
                 "ERC20 transfer failed!"
             );
             bufferedContributions[contributor][currency] = bufferedContributions[contributor][currency]
@@ -182,7 +185,7 @@ library Utils {
                 continue;
 
             require(
-                IERC20(currency).transferFrom(address(this), contributor, amount),
+                IERC20(currency).transfer(contributor, amount),
                 "ERC20 transfer failed!"
             );
 
@@ -193,8 +196,6 @@ library Utils {
 
             emit ContributorWithdrawal(contributor, currency, amount);
         }
-
-        delete contributionsList[contributor];
 
         _refundBufferedERC20(
             contributor,

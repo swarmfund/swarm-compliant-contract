@@ -20,28 +20,23 @@ interface ICurrencyRegistry {
     function toUSD(
         uint256 amount,
         address currencyFrom
-        //uint256 decimals
     ) 
-        external
-        //returns (uint256 outAmount, uint256 outDecimals);
+        external view
         returns (uint256 outAmount);
 
     function toBCY(
         uint256 amount,
         address currencyFrom
-        //,uint256 decimals
     ) 
-        external 
-        //returns (uint256 outAmount, uint256 outDecimals);
+        external view
         returns (uint256 outAmount);
 
     function getRate(
         address currencyFrom,
         address currencyTo,
-        uint256 amount,
-        uint256 decimals
+        uint256 amount
     ) 
     external
-    returns (uint256, uint256);
+    returns (uint256);
 
 }
