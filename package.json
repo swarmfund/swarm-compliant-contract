@@ -8,7 +8,7 @@
     "chai": "^4.2.0",
     "dotenv": "^8.1.0",
     "ethereumjs-abi": "^0.6.7",
-    "moment": "^2.24.0",
+    "moment": "^2.29.4",
     "node-gyp": "^5.0.3",
     "openzeppelin-solidity": "^2.3.0",
     "openzeppelin-test-helpers": "^0.3.2",
